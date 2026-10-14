@@ -3,9 +3,17 @@
 Diese Seite beschreibt, welche Kurs- und Studierendendaten Teamable Analytics aus Moodle abrufen kann, über welche Schnittstellen das möglich ist und wie sich die Daten auf das bestehende Datenmodell abbilden lassen.
 
 !!! abstract "Kurzfassung"
-    - Die **klassischen Moodle Web Services** liefern alle Daten, die wir brauchen: Kurse, Teilnehmende mit Rollen, bestehende Gruppen, Profilfelder, Umfrage- und Bewertungsdaten. Außerdem können sie **Teams als Moodle-Gruppen zurückschreiben**.
-    - Im **HTWG-Moodle (4.5.14)** sind Web Services und das REST-Protokoll bereits aktiv. Es fehlt nur ein eigener externer Service für Teamable, den das Rechenzentrum anlegen muss. Die nötigen Funktionen stehen unter [Anfrage an das Rechenzentrum](#anfrage-an-das-rechenzentrum).
+    - Die **klassischen Moodle Web Services** bieten Funktionen für alle Daten, die wir brauchen: Kurse, Teilnehmende mit Rollen, Gruppen, Profilfelder, Umfrage- und Bewertungsdaten. Außerdem können sie **Teams als Moodle-Gruppen zurückschreiben**.
+    - **Verifiziert** ist an der HTWG bisher nur die Sicht von Studierenden: Die Teilnehmerliste enthält dort nur ID, Name, E-Mail, Profilbild und Rolle. Welche weiteren Felder (z. B. `idnumber`, Gruppen, Profilfelder) eine Lehrperson erhält, ist **noch offen**.
+    - Im **HTWG-Moodle (4.5.14)** sind Web Services und das REST-Protokoll bereits aktiv. Es fehlt ein eigener externer Service für Teamable, den das Rechenzentrum anlegen muss. Die nötigen Funktionen stehen unter [Anfrage an das Rechenzentrum](#anfrage-an-das-rechenzentrum).
     - Alle Canvas-Funktionen des UBC-Systems haben eine Moodle-Entsprechung, mit einer Ausnahme: Den Opt-in-Test kann das System nicht selbst anlegen.
+
+| Angabe auf dieser Seite | Wie belegt |
+| --- | --- |
+| Konfiguration der HTWG-Instanz | Öffentliche Endpunkte der HTWG-Instanz abgefragt |
+| Teilnehmerliste aus Studierendensicht | Echter Aufruf an der HTWG (siehe [Beispielaufruf](#beispielaufruf)) |
+| Funktionen, Parameter, Capabilities, LTI-Claims | Moodle-4.5-Quellcode |
+| Rückgabefelder aus Lehrendensicht | Nur laut Moodle-Code möglich, an der HTWG **nicht geprüft** |
 
 ## Die HTWG-Instanz
 
@@ -47,7 +55,7 @@ sequenceDiagram
     L->>T: Kurs auswählen
     T->>M: core_enrol_get_users_courses
     T->>M: core_enrol_get_enrolled_users
-    M-->>T: Teilnehmende mit Rollen, Gruppen, Profilfeldern
+    M-->>T: Teilnehmende mit Rollen (weitere Felder je nach Rechten)
     T->>M: mod_choice_get_choice_results / mod_feedback_get_responses_analysis / gradereport_user_get_grade_items
     M-->>T: Antworten und Noten als Kriterien
     T->>A: Teams berechnen
@@ -88,9 +96,9 @@ Jeder Token gehört zu genau einem **Nutzer** und einem **externen Service**:
 !!! warning "Token des App-Service nur für Tests"
     Der Service der Moodle-App (`moodle_mobile_app`) ist an der HTWG aktiv. Damit kann sich jede Person mit ihren Zugangsdaten selbst einen Token holen und die lesenden Funktionen ausprobieren. **Für Teamable selbst eignet sich dieser Weg aber nicht:**
 
-- Teamable müsste Passwörter entgegennehmen.
-- Der Token hat Zugriff auf alle Funktionen der App, nicht nur auf die benötigten.
-- Die Funktionen zum **Anlegen von Gruppen** (`core_group_create_groups`, `core_group_add_group_members`, `core_group_create_groupings`, `core_group_assign_grouping`) gehören **nicht** zum App-Service.
+    - Teamable müsste Passwörter entgegennehmen.
+    - Der Token hat Zugriff auf alle Funktionen der App, nicht nur auf die benötigten.
+    - Die Funktionen zum **Anlegen von Gruppen** (`core_group_create_groups`, `core_group_add_group_members`, `core_group_create_groupings`, `core_group_assign_grouping`) gehören **nicht** zum App-Service.
 
 ### Nötige Einrichtung in Moodle
 
@@ -106,6 +114,8 @@ Jeder Token gehört zu genau einem **Nutzer** und einem **externen Service**:
 
 Die Capabilities stammen aus der Funktionsdefinition in Moodle 4.5 (`lib/db/services.php` bzw. `db/services.php` des jeweiligen Plugins). Zusätzlich prüft jede Funktion den Kurszugriff und die Datenschutzeinstellungen. Die Spalte „App“ zeigt, ob die Funktion zum Service der Moodle-App gehört und sich damit schon jetzt testen lässt.
 
+Die genannten Felder sind die, die eine Funktion **laut Moodle-Code höchstens** liefert. Was tatsächlich zurückkommt, hängt von den Rechten des Token-Nutzers und den Datenschutzeinstellungen der Instanz ab.
+
 ### Kurse
 
 | Funktion | Zweck und wichtige Felder | Capability | App |
@@ -119,7 +129,7 @@ Die Capabilities stammen aus der Funktionsdefinition in Moodle 4.5 (`lib/db/serv
 
 | Funktion | Zweck und wichtige Felder | Capability | App |
 | --- | --- | --- | --- |
-| `core_enrol_get_enrolled_users` | **Kernfunktion:** alle Teilnehmenden eines Kurses mit `id`, `firstname`, `lastname`, `email`, `idnumber`, `roles[]`, `groups[]`, `customfields[]` | `moodle/course:viewparticipants`; für E-Mail und verborgene Felder zusätzlich `moodle/course:useremail`, `moodle/user:viewhiddendetails` | ✔ |
+| `core_enrol_get_enrolled_users` | **Kernfunktion:** alle Teilnehmenden eines Kurses. Möglich sind u. a. `id`, `firstname`, `lastname`, `email`, `idnumber`, `roles[]`, `groups[]`, `customfields[]`. An der HTWG aus Studierendensicht geliefert: nur `id`, Name, `email`, Profilbild, `roles[]` | `moodle/course:viewparticipants`; für E-Mail und verborgene Felder zusätzlich `moodle/course:useremail`, `moodle/user:viewhiddendetails` | ✔ |
 | `core_user_get_course_user_profiles` | Detailprofil einzelner Nutzer im Kurs, inkl. `customfields[]` | `moodle/user:viewdetails` | ✔ |
 
 Nützliche `options` für `core_enrol_get_enrolled_users`:
@@ -132,8 +142,7 @@ Nützliche `options` für `core_enrol_get_enrolled_users`:
 | `userfields` | Zurückgegebene Felder einschränken (Datensparsamkeit) |
 | `limitfrom`, `limitnumber`, `sortby`, `sortdirection` | Paging und Sortierung |
 
-!!! tip "Kriterien aus Profilfeldern"
-    `core_enrol_get_enrolled_users` liefert `customfields[]` mit. Selbst definierte Profilfelder (z. B. Studiengang oder Semester, falls die HTWG sie pflegt) kommen also direkt mit der Teilnehmerliste, ohne zusätzlichen Aufruf.
+`core_enrol_get_enrolled_users` kann zusätzlich `customfields[]` liefern. Selbst definierte Profilfelder (z. B. Studiengang oder Semester, falls die HTWG sie pflegt) kämen dann direkt mit der Teilnehmerliste. Aus Studierendensicht sind sie an der HTWG nicht enthalten.
 
 ### Gruppen (Teams zurückschreiben)
 
@@ -210,41 +219,58 @@ Die Lehrperson braucht in ihrem Kurs diese Rechte, die die Trainer-Rolle standar
 
 ## Beispielaufruf
 
+Echter Aufruf gegen das HTWG-Moodle mit dem Token eines **Studierenden-Accounts** (App-Service), begrenzt auf drei Teilnehmende:
+
 ```bash
 curl -s "https://moodle.htwg-konstanz.de/moodle/webservice/rest/server.php" \
   -d wstoken=$MOODLE_TOKEN \
   -d wsfunction=core_enrol_get_enrolled_users \
   -d moodlewsrestformat=json \
-  -d courseid=42 \
-  -d "options[0][name]=onlyactive" -d "options[0][value]=1" \
-  -d "options[1][name]=userfields" -d "options[1][value]=id,firstname,lastname,email,idnumber,groups,roles,customfields"
+  -d courseid=<kurs-id> \
+  -d "options[0][name]=limitnumber" -d "options[0][value]=3"
 ```
+
+Antwort (eine von drei Personen, anonymisiert: Namen, IDs und E-Mail-Adressen ersetzt, Struktur und Feldnamen unverändert):
 
 ```json
 [
   {
-    "id": 1337,
+    "id": 1001,
     "firstname": "Erika",
     "lastname": "Mustermann",
     "fullname": "Erika Mustermann",
     "email": "erika.mustermann@htwg-konstanz.de",
-    "idnumber": "301234",
-    "roles": [{ "roleid": 5, "name": "", "shortname": "student", "sortorder": 0 }],
-    "groups": [{ "id": 17, "name": "Team A", "description": "", "descriptionformat": 1 }],
-    "customfields": [{ "type": "text", "value": "MSI", "name": "Studiengang", "shortname": "studiengang" }]
+    "profileimageurlsmall": "https://moodle.htwg-konstanz.de/moodle/theme/image.php/boost/core/1/u/f2",
+    "profileimageurl": "https://moodle.htwg-konstanz.de/moodle/theme/image.php/boost/core/1/u/f1",
+    "roles": [
+      {
+        "roleid": 5,
+        "name": "Studierende",
+        "shortname": "student",
+        "sortorder": 0
+      }
+    ]
   }
 ]
 ```
 
-(Antwort gekürzt. Feldnamen wie in Moodle 4.5, Werte frei erfunden.)
+Aus der Sicht von Studierenden liefert die HTWG-Instanz also nur **ID, Name, E-Mail, Profilbild und Rolle**. Die Rolle heißt an der HTWG „Studierende“, ihr Kurzname ist wie im Moodle-Standard `student`. Felder wie `username`, `idnumber`, `groups` oder `customfields` fehlen. Mit dem Token einer Lehrperson kommen je nach Rechten und Datenschutzeinstellungen weitere Felder hinzu. Welche das an der HTWG genau sind, muss noch mit einem Lehrenden-Account geprüft werden.
 
 !!! tip "Selbst ausprobieren"
     Lesende Funktionen lassen sich mit dem eigenen HTWG-Account über den App-Service testen, ohne das Rechenzentrum. Studierende haben in ihren Kursen standardmäßig `moodle/course:viewparticipants`.
 
-1. Den Token holen und als `MOODLE_TOKEN` setzen: `curl -s https://moodle.htwg-konstanz.de/moodle/login/token.php -d username=… -d password=… -d service=moodle_mobile_app`
-2. Den Beispielaufruf oben mit einer eigenen Kurs-ID ausführen.
+    Den Token so holen, dass das Passwort nicht in der Shell-History landet:
 
-    Den Token anschließend unter *Einstellungen › Sicherheitsschlüssel* wieder löschen.
+    ```bash
+    read -r -p "Benutzername: " U; read -r -s -p "Passwort: " P; echo
+    MOODLE_TOKEN=$(curl -s https://moodle.htwg-konstanz.de/moodle/login/token.php \
+      --data-urlencode "username=$U" --data-urlencode "password=$P" \
+      -d service=moodle_mobile_app | sed -E 's/.*"token":"([^"]+)".*/\1/'); unset P
+    ```
+
+    Danach den Beispielaufruf oben mit einer eigenen Kurs-ID ausführen (die ID steht in der Kurs-URL `…/course/view.php?id=…`).
+
+    Der Token bleibt gültig, bis er unter *Profil › Einstellungen › Sicherheitsschlüssel* zurückgesetzt wird. Wer die Moodle-App nutzt, bekommt meist denselben Token wie die App und muss sich dort nach dem Zurücksetzen neu anmelden.
 
 ## Alternativen innerhalb von Moodle
 
@@ -272,13 +298,13 @@ Beim Start aus einem Kurs ruft das Tool dann die Teilnehmerliste ab:
 !!! tip "LTI 1.3 ist im Backend schon vorhanden"
     Das UBC-Backend implementiert den LTI-1.3-Launch bereits mit `pylti1p3` (`src/lti/views.py`). Allerdings liest der Launch Kurs und Nutzer aus den **Canvas-spezifischen Custom Claims** `canvas_course_id` und `canvas_user_id`. Moodle sendet diese Angaben in den Standard-Claims:
 
-| Angabe | LTI-Claim | Wert in Moodle |
-| --- | --- | --- |
-| Nutzer | `sub` | Moodle-User-ID |
-| Kurs | `https://purl.imsglobal.org/spec/lti/claim/context` → `id` | Moodle-Kurs-ID |
-| Matrikelnummer o. Ä. | `https://purl.imsglobal.org/spec/lti/claim/lis` → `person_sourcedid` | `idnumber` |
+    | Angabe | LTI-Claim | Wert in Moodle |
+    | --- | --- | --- |
+    | Nutzer | `sub` | Moodle-User-ID |
+    | Kurs | `https://purl.imsglobal.org/spec/lti/claim/context` → `id` | Moodle-Kurs-ID |
+    | Matrikelnummer o. Ä. | `https://purl.imsglobal.org/spec/lti/claim/lis` → `person_sourcedid` | `idnumber` |
 
-Außerdem nimmt der Launch bisher immer die erste `Organization` (`Organization.objects.first()`), statt sie anhand des Ausstellers (`iss`) zuzuordnen.
+    Außerdem nimmt der Launch bisher immer die erste `Organization` (`Organization.objects.first()`), statt sie anhand des Ausstellers (`iss`) zuzuordnen.
 
 ### CSV-Export (Rückfallebene)
 
@@ -307,7 +333,7 @@ Das UBC-Backend greift über die Bibliothek `canvasapi` auf Canvas zu (`src/app/
 
 ### Abbildung auf das Datenmodell
 
-Die Moodle-Daten lassen sich ohne neue Entitäten auf die bestehenden Django-Modelle (`src/app/models/`) abbilden. Das künftige interne Datenmodell kann davon abweichen; die Tabelle zeigt nur, dass Moodle alle heute genutzten Felder liefern kann.
+Die Moodle-Daten lassen sich ohne neue Entitäten auf die bestehenden Django-Modelle (`src/app/models/`) abbilden. Das künftige interne Datenmodell kann davon abweichen. Die Tabelle zeigt, dass Moodle alle heute genutzten Felder liefern *kann*. Mit † markierte Felder kamen aus Studierendensicht an der HTWG nicht mit.
 
 | Modell im UBC-System | Feld | Quelle in Moodle |
 | --- | --- | --- |
@@ -316,19 +342,58 @@ Die Moodle-Daten lassen sich ohne neue Entitäten auf die bestehenden Django-Mod
 | `Course` | `lms_opt_in_quiz_id` | ID der Opt-in-*Abstimmung* (`mod_choice`) |
 | `Course` | `lms_access_token` | Web-Service-Token (bisher ungenutzt, da Canvas per OAuth arbeitet) |
 | `CourseMember` | `lms_id` | Moodle-User-`id` |
-| `CourseMember` | `sis_user_id` | `idnumber` (falls gepflegt, meist die Matrikelnummer) |
+| `CourseMember` | `sis_user_id` | `idnumber`† (falls gepflegt, meist die Matrikelnummer) |
 | `CourseMember` | `first_name`, `last_name` | `firstname`, `lastname` |
 | `CourseMember` | `role` | `roles[].shortname`: `student` → `Student`, `editingteacher` / `teacher` → `Instructor` |
-| `Section` | – | Moodle-Gruppen (`groups[]`), falls Übungsgruppen als Sektionen dienen sollen |
-| `Attribute` / `AttributeOption` / `AttributeResponse` | – | Profilfelder, Antworten aus Abstimmung oder Feedback, Noten |
+| `Section` | – | Moodle-Gruppen (`groups[]`†), falls Übungsgruppen als Sektionen dienen sollen |
+| `Attribute` / `AttributeOption` / `AttributeResponse` | – | Profilfelder (`customfields[]`†), Antworten aus Abstimmung oder Feedback, Noten |
 | `TeamSet` | `name` | Gruppierung |
 | `Team` | `name`, `members` | Gruppe und Mitglieder |
+
+## Hinweise zur Umsetzung
+
+### Fehlerbehandlung
+
+Moodle meldet Fehler **mit HTTP-Status 200**. Den Fehler erkennt man nur am Inhalt:
+
+```json
+{"exception": "core\\exception\\moodle_exception", "errorcode": "invalidtoken", "message": "Ungültiges Token - Token wurde nicht gefunden"}
+```
+
+Ein Client muss daher jede Antwort auf ein Objekt mit `exception` bzw. `errorcode` prüfen, statt sich auf den HTTP-Status zu verlassen. Die Meldungstexte (`message`) sind in der Sprache der Instanz verfasst und eignen sich nicht für Fallunterscheidungen, nur `errorcode` ist stabil.
+
+### Team-Export wiederholbar machen
+
+Der Export besteht aus vier Aufrufen: Gruppierung anlegen, Gruppen anlegen, Gruppen zuordnen, Mitglieder hinzufügen. Jeder einzelne Aufruf läuft in Moodle in einer Datenbank-Transaktion, die Abfolge als Ganzes aber nicht. Bricht der Export in der Mitte ab, bleibt ein halber Zustand zurück. Ein zweiter Versuch scheitert dann: Moodle lehnt Gruppen und Gruppierungen mit bereits vergebenem Namen ab (*„Group with the same name already exists in the course“*).
+
+Empfehlung:
+
+- Jeder Gruppe und Gruppierung eine **eindeutige `idnumber`** aus Teamable mitgeben, z. B. `teamable-<teamset-id>-<team-slug>`. Die `idnumber` ist in Moodle pro Kurs eindeutig.
+- Vor dem Anlegen mit `core_group_get_course_groups` bzw. `core_group_get_course_groupings` prüfen, was schon existiert, und nur Fehlendes anlegen.
+- Mitglieder erneut hinzuzufügen ist unkritisch: `core_group_add_group_members` ignoriert bestehende Mitgliedschaften.
+
+### Identität und Aktualität
+
+- **Stabiler Schlüssel:** Die Moodle-User-ID ist nur innerhalb einer Instanz eindeutig. Ein Nutzer wird daher über *Instanz-URL + User-ID* identifiziert, nicht über die E-Mail-Adresse, die sich ändern kann. LTI (`sub`) und Web Services liefern dieselbe User-ID.
+- **Momentaufnahme:** Der Import gibt den Stand zum Zeitpunkt des Abrufs wieder. Wer sich danach ein- oder ausschreibt, fehlt bzw. bleibt in Teamable. Vor dem Erzeugen der Teams sollte die Teilnehmerliste daher neu abgerufen werden.
+
+### Sicherheit und Datenschutz
+
+- **Tokens sind Zugangsdaten.** Ein Token pro Lehrperson erlaubt Teamable, in deren Kursen Gruppen anzulegen und Teilnehmerdaten zu lesen. Im UBC-Modell liegt er bisher als einfaches Textfeld in `Course.lms_access_token`. Er muss verschlüsselt gespeichert werden, darf in keiner API-Antwort und keinem Log auftauchen und muss sich von der Lehrperson widerrufen lassen.
+- **Datensparsamkeit:** Mit der Option `userfields` nur die Felder abrufen, die der Algorithmus tatsächlich braucht, und nur diese speichern.
+- **Löschung:** Teilnehmerdaten eines Kurses werden gelöscht, sobald die Teams exportiert sind bzw. der Kurs endet. Die konkrete Frist ist mit dem Datenschutz abzustimmen.
+
+### Testen
+
+- **Integrationstests** gegen ein lokales Moodle 4.5 mit [moodle-docker](https://github.com/moodlehq/moodle-docker). Dort lassen sich Lehrenden-Accounts, Kurse und Testdaten frei anlegen, ohne das HTWG-Moodle zu belasten. Das klärt auch die offene Frage nach der Lehrendensicht.
+- **Unit-Tests** des Moodle-Adapters mit festen Antworten (Fixtures). Die anonymisierte Antwort aus dem [Beispielaufruf](#beispielaufruf) ist dafür ein Ausgangspunkt.
 
 ## Offene Fragen
 
 - [ ] Richtet das Rechenzentrum einen eigenen externen Service ein, und wie werden die Tokens verteilt (siehe [Anfrage an das Rechenzentrum](#anfrage-an-das-rechenzentrum))?
+- [ ] Welche Felder liefert `core_enrol_get_enrolled_users` mit dem Token einer Lehrperson (siehe [Beispielaufruf](#beispielaufruf))?
 - [ ] Werden an der HTWG eigene Profilfelder wie Studiengang oder Semester gepflegt, und ist `idnumber` belegt?
-- [ ] Datenschutz (DSGVO): Welche Felder dürfen wir verarbeiten? Mit der Option `userfields` nur das Nötige abrufen.
+- [ ] Welche Felder dürfen wir verarbeiten, und wie lange dürfen wir sie speichern? Abstimmung mit dem Datenschutz der HTWG.
 - [ ] Soll Teamable zusätzlich als LTI-Tool registriert werden (Login aus dem Kurs heraus)?
 
 ## Fazit
@@ -354,6 +419,7 @@ Technisch bietet sich an, die Zugriffe in `src/app/canvas/` hinter eine gemeinsa
 
 - [`lib/db/services.php` – Funktionsdefinitionen mit Capabilities](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/lib/db/services.php)
 - [`enrol/externallib.php` – `core_enrol_get_enrolled_users`](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/enrol/externallib.php)
+- [`group/externallib.php` – Gruppenfunktionen (Transaktionen, Namensprüfung)](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/group/externallib.php)
 - [`mod/lti/locallib.php` – LTI-Claims](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/mod/lti/locallib.php)
 - [`mod/lti/service/memberships` – Names and Role Provisioning](https://github.com/moodle/moodle/tree/MOODLE_405_STABLE/mod/lti/service/memberships)
 
@@ -361,4 +427,5 @@ Technisch bietet sich an, die Zugriffe in `src/app/canvas/` hinter eine gemeinsa
 
 - [Moodle 5.3 – Personal access tokens](https://docs.moodle.org/503/en/Personal_access_tokens)
 - [1EdTech – LTI Names and Role Provisioning Services](https://www.imsglobal.org/spec/lti-nrps/v2p0)
+- [moodle-docker – lokale Moodle-Umgebung](https://github.com/moodlehq/moodle-docker)
 - [`teamable-backend` (Commit `183a36c`) – Canvas-Anbindung](https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-backend/tree/183a36c/src/app/canvas), [LTI](https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-backend/blob/183a36c/src/lti/views.py), [Modelle](https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-backend/tree/183a36c/src/app/models)
