@@ -1,46 +1,46 @@
-# Moodle-API – verfügbare Endpunkte
+# Moodle API – available endpoints
 
-Diese Seite beschreibt, über welche Wege Teamable Analytics Kurs- und Studierendendaten aus Moodle bekommen kann, welche Endpunkte dafür relevant sind und wie man sie nutzt.
+This page describes the ways Teamable Analytics can obtain course and student data from Moodle, which endpoints are relevant and how to use them.
 
-!!! abstract "Kurzfassung"
-    - Moodle bietet fünf Wege an die Daten:
-        - **Web Services:** REST-Aufrufe mit einem Token. Sie liefern alle benötigten Daten und können Teams als Gruppen zurückschreiben.
-        - **LTI 1.3 Advantage:** Start aus dem Kurs heraus. Liefert die Teilnehmerliste und Noten in eigenen Spalten des Tools.
-        - **CSV-Export:** Manuell durch die Lehrperson. Gruppen lassen sich importieren, aber ohne Mitglieder.
-        - **Eigenes Moodle-Plugin:** Kann alles, muss aber vom Rechenzentrum installiert werden.
-        - **Neue REST API:** Erst ab Moodle 5.3, an der HTWG also nicht verfügbar.
-    - Im **HTWG-Moodle (4.5.14)** sind Web Services und das REST-Protokoll bereits aktiv. Es fehlt ein eigener externer Service für Teamable, den das Rechenzentrum anlegen muss. Die nötigen Funktionen stehen unter [Anfrage an das Rechenzentrum](#anfrage-an-das-rechenzentrum).
-    - Grenzen der Web Services in Moodle 4.5:
-        - Es gibt keinen OAuth2-Ablauf, über den ein externes Tool automatisch einen Token bekommt. Der Token wird von Hand übertragen, oder ein technischer Nutzer übernimmt den Zugriff.
-        - Aktivitäten wie Abstimmungen oder Umfragen lassen sich nicht per API anlegen.
+!!! abstract "Summary"
+    - Moodle offers five ways to get the data:
+        - **Web services:** REST calls with a token. They provide all required data and can write teams back as groups.
+        - **LTI 1.3 Advantage:** Launch from within the course. Provides the participant list and grades in the tool's own columns.
+        - **CSV export:** Done manually by the teacher. Groups can be imported, but without members.
+        - **Custom Moodle plugin:** Can do everything, but has to be installed by the computing centre.
+        - **New REST API:** Only from Moodle 5.3, so not available at HTWG.
+    - In the **HTWG Moodle (4.5.14)**, web services and the REST protocol are already enabled. What is missing is a dedicated external service for Teamable, which the computing centre has to create. The required functions are listed under [Request to the computing centre](#request-to-the-computing-centre).
+    - Limits of the web services in Moodle 4.5:
+        - There is no OAuth2 flow through which an external tool obtains a token automatically. The token is transferred by hand, or a technical user handles the access.
+        - Activities such as choices or feedback surveys cannot be created via the API.
 
-!!! warning "Noch nicht verifiziert: Sicht von Lehrenden"
-    Alle echten Aufrufe gegen das HTWG-Moodle liefen bisher mit dem Token eines **Studierenden-Accounts**. Die Teilnehmerliste enthielt dort nur ID, Name, E-Mail, Profilbild und Rolle.
+!!! warning "Not yet verified: the teacher's view"
+    All real calls against the HTWG Moodle so far were made with the token of a **student account**. There, the participant list only contained ID, name, email, profile picture and role.
 
-    Was eine **Lehrperson** zusätzlich erhält, ist nur aus dem Moodle-Code abgeleitet und noch nicht gemessen. Das betrifft z. B. `idnumber`, Gruppen, Profilfelder, Noten aller Studierenden und die Antworten in Abstimmungen und Umfragen. Die Felder in der [Übersicht der Endpunkte](#ubersicht-der-endpunkte) sind deshalb Obergrenzen. Wie sich das ohne Rechenzentrum prüfen lässt, steht unter [Sicht von Lehrenden prüfen](#sicht-von-lehrenden-prufen).
+    What a **teacher** receives in addition is only derived from the Moodle code and has not been measured yet. This concerns e.g. `idnumber`, groups, profile fields, grades of all students and the responses in choices and feedback surveys. The fields in the [endpoint overview](#endpoint-overview) are therefore upper bounds. How to check this without the computing centre is described under [Checking the teacher's view](#checking-the-teachers-view).
 
-## Welche Daten Teamable braucht
+## What data Teamable needs
 
-Zur Einordnung, welche Endpunkte relevant sind: Teamable bildet Teams für einen Kurs. Dafür braucht es aus dem LMS
+To put the relevant endpoints into context: Teamable forms teams for a course. For this, it needs from the LMS
 
-- den **Kurs** und die **Rolle** der Person, die Teamable öffnet,
-- die **Teilnehmenden** mit Name, Kennung und Rolle,
-- **Kriterien** für die Teambildung, z. B. Antworten aus einer Umfrage oder Noten,
-- einen Weg, die fertigen **Teams als Gruppen zurückzuschreiben**.
+- the **course** and the **role** of the person opening Teamable,
+- the **participants** with name, identifier and role,
+- **criteria** for team formation, e.g. answers from a survey or grades,
+- a way to **write the finished teams back as groups**.
 
-## Die HTWG-Instanz
+## The HTWG instance
 
-Die folgenden Angaben stammen aus öffentlich erreichbaren Endpunkten von [moodle.htwg-konstanz.de/moodle](https://moodle.htwg-konstanz.de/moodle/) (Stand: 14.10.2026):
+The following information comes from publicly accessible endpoints of [moodle.htwg-konstanz.de/moodle](https://moodle.htwg-konstanz.de/moodle/) (as of 14.10.2026):
 
-| Eigenschaft | Wert | Quelle |
+| Property | Value | Source |
 | --- | --- | --- |
-| Moodle-Version | **4.5.14** (LTS) | `UPGRADING.md` |
-| Web Services | aktiviert (`enablewebservices: 1`) | `tool_mobile_get_public_config` |
-| REST-Protokoll | aktiviert: `webservice/rest/server.php` antwortet mit `invalidtoken` statt mit einem Hinweis auf deaktivierte Web Services | Aufruf ohne Token |
-| Service der Moodle-App | aktiviert (`enablemobilewebservice: 1`) | `tool_mobile_get_public_config` |
-| Login-Art | `typeoflogin: 1`: Login mit Benutzername und Passwort direkt in der App, kein SSO | `tool_mobile_get_public_config` |
+| Moodle version | **4.5.14** (LTS) | `UPGRADING.md` |
+| Web services | enabled (`enablewebservices: 1`) | `tool_mobile_get_public_config` |
+| REST protocol | enabled: `webservice/rest/server.php` responds with `invalidtoken` instead of a notice about disabled web services | Call without token |
+| Moodle app service | enabled (`enablemobilewebservice: 1`) | `tool_mobile_get_public_config` |
+| Login type | `typeoflogin: 1`: login with username and password directly in the app, no SSO | `tool_mobile_get_public_config` |
 
-Die Abfrage der öffentlichen Konfiguration lässt sich ohne Login wiederholen:
+The public configuration can be queried again without logging in:
 
 ```bash
 curl -s "https://moodle.htwg-konstanz.de/moodle/lib/ajax/service-nologin.php" \
@@ -48,183 +48,183 @@ curl -s "https://moodle.htwg-konstanz.de/moodle/lib/ajax/service-nologin.php" \
   -d '[{"index":0,"methodname":"tool_mobile_get_public_config","args":{}}]'
 ```
 
-## Wege im Überblick
+## Overview of the options
 
-| Weg | Authentifizierung | Umfang | An der HTWG |
+| Option | Authentication | Scope | At HTWG |
 | --- | --- | --- | --- |
-| **Web Services** – `webservice/rest/server.php` | Web-Service-Token (pro Nutzer und Service) | Hunderte `core_*`-/`mod_*`-Funktionen, lesend und schreibend | Aktiv. Ein eigener Service muss angelegt werden. |
-| **LTI 1.3 Advantage** – NRPS und AGS | Signierter Launch, danach OAuth 2 Client Credentials | Teilnehmerliste mit Rollen. Noten nur in eigenen Spalten des Tools. | Tool muss registriert werden. |
-| **CSV-Export und -Import** | Keine, die Lehrperson arbeitet in der Oberfläche | Teilnehmende und Bewertungen exportieren, Gruppen ohne Mitglieder importieren | Sofort nutzbar |
-| **Eigenes Moodle-Plugin** | Je nach Umsetzung | Beliebig, auch Dinge, die die Web Services nicht können | Plugin muss installiert werden. |
-| **Neue REST API** – `api/rest/v2/…` | Personal Access Token oder OAuth-2-Client | Erst ab Moodle 5.3, dort nur wenige Bereiche | Nicht verfügbar (4.5) |
+| **Web services** – `webservice/rest/server.php` | Web service token (per user and service) | Hundreds of `core_*`/`mod_*` functions, read and write | Enabled. A dedicated service has to be created. |
+| **LTI 1.3 Advantage** – NRPS and AGS | Signed launch, then OAuth 2 client credentials | Participant list with roles. Grades only in the tool's own columns. | Tool has to be registered. |
+| **CSV export and import** | None, the teacher works in the user interface | Export participants and grades, import groups without members | Usable right away |
+| **Custom Moodle plugin** | Depends on the implementation | Anything, including things the web services cannot do | Plugin has to be installed. |
+| **New REST API** – `api/rest/v2/…` | Personal access token or OAuth 2 client | Only from Moodle 5.3, with few areas covered there | Not available (4.5) |
 
-## Möglicher Ablauf
+## Possible flow
 
-Das Diagramm zeigt, wie Teamable mit Moodle zusammenarbeiten könnte. Angenommen ist ein Start per LTI und der Datenzugriff über Web Services mit dem Token der Lehrperson.
+The diagram shows how Teamable could work together with Moodle. It assumes a launch via LTI and data access via web services with the teacher's token.
 
 ```mermaid
 sequenceDiagram
-    actor L as Lehrperson
-    participant ML as Moodle (Kurs)
-    participant T as Teamable Backend
-    participant M as Moodle (Web Services)
+    actor L as Teacher
+    participant ML as Moodle (course)
+    participant T as Teamable backend
+    participant M as Moodle (web services)
 
-    opt Einmalig
-        L->>ML: Token unter Profil › Einstellungen › Sicherheitsschlüssel kopieren
-        L->>T: Token in Teamable hinterlegen
+    opt Once
+        L->>ML: Copy token from Profile › Preferences › Security keys
+        L->>T: Store token in Teamable
     end
-    L->>ML: Teamable im Kurs öffnen
-    ML->>T: LTI-Launch: User-ID, Kurs-ID, Rolle
-    L->>T: Studierende importieren
+    L->>ML: Open Teamable in the course
+    ML->>T: LTI launch: user ID, course ID, role
+    L->>T: Import students
     T->>M: core_enrol_get_enrolled_users
-    M-->>T: Teilnehmende mit Rollen (weitere Felder je nach Rechten)
-    L->>T: Kriterium wählen
+    M-->>T: Participants with roles (more fields depending on permissions)
+    L->>T: Choose criterion
     T->>M: mod_choice_get_choices_by_courses / mod_feedback_get_feedbacks_by_courses
-    M-->>T: Abstimmungen und Umfragen des Kurses
+    M-->>T: Choices and feedback surveys of the course
     T->>M: mod_choice_get_choice_results / mod_feedback_get_responses_analysis / gradereport_user_get_grade_items
-    M-->>T: Antworten bzw. Noten
-    Note over T: Teams bilden
-    L->>T: Teams bestätigen
+    M-->>T: Responses or grades
+    Note over T: Form teams
+    L->>T: Confirm teams
     T->>M: core_group_get_course_groups, core_group_get_course_groupings
-    M-->>T: Bestehende Gruppen und Gruppierungen
+    M-->>T: Existing groups and groupings
     T->>M: core_group_create_groupings, core_group_create_groups
     T->>M: core_group_assign_grouping, core_group_add_group_members
 ```
 
-## Grundlagen der Web Services
+## Web service basics
 
-### Aufbau eines Aufrufs
+### Structure of a call
 
-Alle Funktionen laufen über einen einzigen Endpunkt:
+All functions go through a single endpoint:
 
 ```text
 https://moodle.htwg-konstanz.de/moodle/webservice/rest/server.php
     ?wstoken=<token>
-    &wsfunction=<funktionsname>
+    &wsfunction=<function_name>
     &moodlewsrestformat=json
-    &<funktionsparameter>
+    &<function_parameters>
 ```
 
-Array-Parameter werden in PHP-Notation übergeben, z. B. `courseids[0]=42` oder `options[0][name]=onlyactive&options[0][value]=1`.
+Array parameters are passed in PHP notation, e.g. `courseids[0]=42` or `options[0][name]=onlyactive&options[0][value]=1`.
 
-Jeder Token gehört zu genau einem **Nutzer** und einem **externen Service**:
+Every token belongs to exactly one **user** and one **external service**:
 
-- **Nutzer:** Jeder Aufruf läuft mit den Rechten dieses Nutzers. Mit dem Token einer Lehrperson sehen wir also genau deren Kurse.
-- **Service:** Er legt fest, welche Funktionen mit dem Token aufrufbar sind.
+- **User:** Every call runs with this user's permissions. With a teacher's token, we therefore see exactly their courses.
+- **Service:** It defines which functions can be called with the token.
 
-### Token beschaffen
+### Obtaining a token
 
-| Weg | Wie | Voraussetzung |
+| Way | How | Requirement |
 | --- | --- | --- |
-| Vom Admin ausgestellt | *Website-Administration › Server › Webservices › Tokens verwalten* | Admin-Rechte |
-| Selbst erzeugt | `login/token.php?username=…&password=…&service=<service_kurzname>` | Capability `moodle/webservice:createtoken`, für den App-Service `moodle/webservice:createmobiletoken` |
+| Issued by the admin | *Site administration › Server › Web services › Manage tokens* | Admin permissions |
+| Self-generated | `login/token.php?username=…&password=…&service=<service_shortname>` | Capability `moodle/webservice:createtoken`, for the app service `moodle/webservice:createmobiletoken` |
 
-!!! warning "Token des App-Service nur für Tests"
-    Der Service der Moodle-App (`moodle_mobile_app`) ist an der HTWG aktiv. Damit kann sich jede Person mit ihren Zugangsdaten selbst einen Token holen und die lesenden Funktionen ausprobieren. **Für Teamable selbst eignet sich dieser Weg aber nicht:**
+!!! warning "Use app service tokens for testing only"
+    The Moodle app service (`moodle_mobile_app`) is enabled at HTWG. With it, anyone can obtain a token with their own credentials and try out the read functions. **This approach is not suitable for Teamable itself, though:**
 
-    - Teamable müsste Passwörter entgegennehmen.
-    - Der Token hat Zugriff auf alle Funktionen der App, nicht nur auf die benötigten.
-    - Die Funktionen zum **Anlegen von Gruppen** (`core_group_create_groups`, `core_group_add_group_members`, `core_group_create_groupings`, `core_group_assign_grouping`) gehören **nicht** zum App-Service.
+    - Teamable would have to accept passwords.
+    - The token has access to all functions of the app, not only the required ones.
+    - The functions for **creating groups** (`core_group_create_groups`, `core_group_add_group_members`, `core_group_create_groupings`, `core_group_assign_grouping`) are **not** part of the app service.
 
-### Nötige Einrichtung in Moodle
+### Required setup in Moodle
 
-| Schritt | HTWG-Stand |
+| Step | HTWG status |
 | --- | --- |
-| Web Services aktivieren | ✔ erledigt |
-| REST-Protokoll aktivieren | ✔ erledigt |
-| `webservice/rest:use` für Nutzende | ✔ wird beim Aktivieren des App-Service automatisch an alle angemeldeten Nutzenden vergeben |
-| Externen Service für Teamable mit den benötigten Funktionen anlegen | offen |
-| Tokens für diesen Service ausstellen bzw. Selbst-Erzeugung erlauben | offen |
+| Enable web services | ✔ done |
+| Enable REST protocol | ✔ done |
+| `webservice/rest:use` for users | ✔ granted automatically to all authenticated users when the app service is enabled |
+| Create an external service for Teamable with the required functions | open |
+| Issue tokens for this service or allow self-generation | open |
 
-## Übersicht der Endpunkte
+## Endpoint overview
 
-Die Capabilities stammen aus der Funktionsdefinition in Moodle 4.5 (`lib/db/services.php` bzw. `db/services.php` des jeweiligen Plugins). Zusätzlich prüft jede Funktion den Kurszugriff und die Datenschutzeinstellungen. Die Spalte „App“ zeigt, ob die Funktion zum Service der Moodle-App gehört und sich damit schon jetzt testen lässt.
+The capabilities come from the function definitions in Moodle 4.5 (`lib/db/services.php` or the plugin's `db/services.php`). In addition, every function checks course access and the privacy settings. The column "App" shows whether the function is part of the Moodle app service and can therefore already be tested now.
 
-Die genannten Felder sind die, die eine Funktion **laut Moodle-Code höchstens** liefert. Was tatsächlich zurückkommt, hängt von den Rechten des Token-Nutzers und den Datenschutzeinstellungen der Instanz ab.
+The listed fields are the ones a function returns **at most according to the Moodle code**. What actually comes back depends on the token user's permissions and the instance's privacy settings.
 
-### Kurse
+### Courses
 
-| Funktion | Zweck und wichtige Felder | Capability | App |
+| Function | Purpose and key fields | Capability | App |
 | --- | --- | --- | --- |
-| `core_webservice_get_site_info` | Token prüfen: aktueller Nutzer, Moodle-Version, freigegebene Funktionen | – | ✔ |
-| `core_enrol_get_users_courses` | Kurse eines Nutzers: `id`, `shortname`, `fullname`, `startdate`, `enddate` | `moodle/course:viewparticipants` | ✔ |
-| `core_course_get_courses_by_field` | Kurs nach `id`, `shortname`, `idnumber` oder `category` suchen | – | ✔ |
-| `core_course_get_enrolled_courses_by_timeline_classification` | Kurse des aktuellen Nutzers nach vergangen / laufend / zukünftig | – | ✔ |
+| `core_webservice_get_site_info` | Check the token: current user, Moodle version, enabled functions | – | ✔ |
+| `core_enrol_get_users_courses` | Courses of a user: `id`, `shortname`, `fullname`, `startdate`, `enddate` | `moodle/course:viewparticipants` | ✔ |
+| `core_course_get_courses_by_field` | Find a course by `id`, `shortname`, `idnumber` or `category` | – | ✔ |
+| `core_course_get_enrolled_courses_by_timeline_classification` | Courses of the current user by past / in progress / future | – | ✔ |
 
-### Teilnehmende
+### Participants
 
-| Funktion | Zweck und wichtige Felder | Capability | App |
+| Function | Purpose and key fields | Capability | App |
 | --- | --- | --- | --- |
-| `core_enrol_get_enrolled_users` | **Kernfunktion:** alle Teilnehmenden eines Kurses. Möglich sind u. a. `id`, `firstname`, `lastname`, `email`, `idnumber`, `roles[]`, `groups[]`, `customfields[]`. An der HTWG aus Studierendensicht geliefert: nur `id`, Name, `email`, Profilbild, `roles[]` | `moodle/course:viewparticipants`; für E-Mail und verborgene Felder zusätzlich `moodle/course:useremail`, `moodle/user:viewhiddendetails` | ✔ |
-| `core_user_get_course_user_profiles` | Detailprofil einzelner Nutzer im Kurs, inkl. `customfields[]` | `moodle/user:viewdetails` | ✔ |
+| `core_enrol_get_enrolled_users` | **Core function:** all participants of a course. Possible fields include `id`, `firstname`, `lastname`, `email`, `idnumber`, `roles[]`, `groups[]`, `customfields[]`. Returned at HTWG from a student's view: only `id`, name, `email`, profile picture, `roles[]` | `moodle/course:viewparticipants`; for email and hidden fields additionally `moodle/course:useremail`, `moodle/user:viewhiddendetails` | ✔ |
+| `core_user_get_course_user_profiles` | Detailed profile of individual users in the course, incl. `customfields[]` | `moodle/user:viewdetails` | ✔ |
 
-Nützliche `options` für `core_enrol_get_enrolled_users`:
+Useful `options` for `core_enrol_get_enrolled_users`:
 
-| Option | Wirkung |
+| Option | Effect |
 | --- | --- |
-| `onlyactive` | Nur aktive Einschreibungen (ohne gesperrte Studierende); benötigt `moodle/course:enrolreview` |
-| `withcapability` | Nur Nutzer mit einer Capability, z. B. `mod/assign:submit` für nur Studierende; benötigt `moodle/role:review` |
-| `groupid` | Nur Mitglieder einer Gruppe |
-| `userfields` | Zurückgegebene Felder einschränken (Datensparsamkeit) |
-| `limitfrom`, `limitnumber`, `sortby`, `sortdirection` | Paging und Sortierung |
+| `onlyactive` | Only active enrolments (without suspended students); requires `moodle/course:enrolreview` |
+| `withcapability` | Only users with a capability, e.g. `mod/assign:submit` for students only; requires `moodle/role:review` |
+| `groupid` | Only members of one group |
+| `userfields` | Restrict the returned fields (data minimisation) |
+| `limitfrom`, `limitnumber`, `sortby`, `sortdirection` | Paging and sorting |
 
-`core_enrol_get_enrolled_users` kann zusätzlich `customfields[]` liefern. Selbst definierte Profilfelder (z. B. Studiengang oder Semester, falls die HTWG sie pflegt) kämen dann direkt mit der Teilnehmerliste. Aus Studierendensicht sind sie an der HTWG nicht enthalten.
+`core_enrol_get_enrolled_users` can additionally return `customfields[]`. Custom profile fields (e.g. degree programme or semester, if HTWG maintains them) would then come directly with the participant list. From a student's view, they are not included at HTWG.
 
-Die Rolle steht in `roles[].shortname`. Im Moodle-Standard gibt es im Kurs diese Rollen:
+The role is in `roles[].shortname`. Standard Moodle has these roles in a course:
 
-| Kurzname | Rolle | Hinweis |
+| Short name | Role | Note |
 | --- | --- | --- |
-| `student` | Studierende | An der HTWG „Studierende“ |
-| `editingteacher` | Trainer/in | Hat alle Rechte, die Teamable braucht |
-| `teacher` | Trainer/in ohne Bearbeitungsrecht | Kann Teilnehmende, Noten und Antworten lesen, aber **keine Gruppen anlegen** (`moodle/course:managegroups` fehlt). Auch `onlyactive` und E-Mail-Adressen sind ohne Zusatzrechte nicht verfügbar. |
+| `student` | Student | Called "Studierende" at HTWG |
+| `editingteacher` | Teacher | Has all permissions Teamable needs |
+| `teacher` | Non-editing teacher | Can read participants, grades and responses, but **cannot create groups** (`moodle/course:managegroups` is missing). `onlyactive` and email addresses are also not available without additional permissions. |
 
-### Gruppen (Teams zurückschreiben)
+### Groups (writing teams back)
 
-| Funktion | Zweck und wichtige Felder | Capability | App |
+| Function | Purpose and key fields | Capability | App |
 | --- | --- | --- | --- |
-| `core_group_get_course_groups` | Bestehende Gruppen eines Kurses: `id`, `name`, `idnumber` | `moodle/course:managegroups` | ✔ |
-| `core_group_get_course_groupings` | Bestehende Gruppierungen eines Kurses | `moodle/course:managegroups`* | ✔ |
-| `core_group_create_groupings` | Gruppierung für einen Teamsatz anlegen (z. B. „Teamable – Projekt A“) | `moodle/course:managegroups`* | ✘ |
-| `core_group_create_groups` | Gruppen (Teams) anlegen | `moodle/course:managegroups` | ✘ |
-| `core_group_assign_grouping` | Gruppen einer Gruppierung zuordnen | `moodle/course:managegroups`* | ✘ |
-| `core_group_add_group_members` | Nutzer zu Gruppen hinzufügen | `moodle/course:managegroups` | ✘ |
-| `core_group_delete_groups` | Gruppen löschen, z. B. um einen fehlerhaften Export aufzuräumen | `moodle/course:managegroups` | ✘ |
+| `core_group_get_course_groups` | Existing groups of a course: `id`, `name`, `idnumber` | `moodle/course:managegroups` | ✔ |
+| `core_group_get_course_groupings` | Existing groupings of a course | `moodle/course:managegroups`* | ✔ |
+| `core_group_create_groupings` | Create a grouping for a team set (e.g. "Teamable – Project A") | `moodle/course:managegroups`* | ✘ |
+| `core_group_create_groups` | Create groups (teams) | `moodle/course:managegroups` | ✘ |
+| `core_group_assign_grouping` | Assign groups to a grouping | `moodle/course:managegroups`* | ✘ |
+| `core_group_add_group_members` | Add users to groups | `moodle/course:managegroups` | ✘ |
+| `core_group_delete_groups` | Delete groups, e.g. to clean up a failed export | `moodle/course:managegroups` | ✘ |
 
-\* Nicht in `services.php` angegeben, wird aber in der Funktion selbst geprüft.
+\* Not declared in `services.php`, but checked inside the function itself.
 
-### Kriterien und Leistungsdaten
+### Criteria and performance data
 
-| Funktion | Zweck und wichtige Felder | Capability | App |
+| Function | Purpose and key fields | Capability | App |
 | --- | --- | --- | --- |
-| `mod_choice_get_choices_by_courses` | *Abstimmungen* eines Kurses auflisten, um die richtige auszuwählen: `id`, `name` | – | ✔ |
-| `mod_choice_get_choice_results` | Ergebnisse einer Abstimmung (z. B. Opt-in, Themenwunsch): `options[].userresponses[]` | `mod/choice:readresponses`* | ✔ |
-| `mod_feedback_get_feedbacks_by_courses` | *Feedback*-Umfragen eines Kurses auflisten: `id`, `name`, `anonymous` | `mod/feedback:view` | ✔ |
-| `mod_feedback_get_responses_analysis` | Antworten einer Feedback-Umfrage je Nutzer, wenn nicht anonym: `attempts[].responses[]` | `mod/feedback:viewreports` | ✔ |
-| `gradereport_user_get_grade_items` | Alle Bewertungsaspekte mit Noten je Nutzer: `itemname`, `graderaw`, `percentageformatted` | `gradereport/user:view`, für alle Nutzer zusätzlich `moodle/grade:viewall`* | ✔ |
+| `mod_choice_get_choices_by_courses` | List the *choices* of a course to pick the right one: `id`, `name` | – | ✔ |
+| `mod_choice_get_choice_results` | Results of a choice (e.g. opt-in, topic preference): `options[].userresponses[]` | `mod/choice:readresponses`* | ✔ |
+| `mod_feedback_get_feedbacks_by_courses` | List the *feedback* surveys of a course: `id`, `name`, `anonymous` | `mod/feedback:view` | ✔ |
+| `mod_feedback_get_responses_analysis` | Responses of a feedback survey per user, if not anonymous: `attempts[].responses[]` | `mod/feedback:viewreports` | ✔ |
+| `gradereport_user_get_grade_items` | All grade items with grades per user: `itemname`, `graderaw`, `percentageformatted` | `gradereport/user:view`, for all users additionally `moodle/grade:viewall`* | ✔ |
 
-\* Nicht in `services.php` angegeben, wird aber in der Funktion selbst geprüft.
+\* Not declared in `services.php`, but checked inside the function itself.
 
-Abstimmungen und Umfragen kann Teamable nicht selbst anlegen: `core_courseformat_create_module` unterstützt in Moodle 4.5 nur Unterabschnitte. Die Lehrperson legt sie in Moodle an, Teamable findet sie dann über die beiden Listen-Funktionen.
+Teamable cannot create choices or feedback surveys itself: in Moodle 4.5, `core_courseformat_create_module` only supports subsections. The teacher creates them in Moodle, and Teamable then finds them via the two list functions.
 
-??? note "Weitere Funktionen mit geringer Relevanz"
-    | Funktion | Zweck |
+??? note "Other functions of lower relevance"
+    | Function | Purpose |
     | --- | --- |
-    | `core_course_get_courses` | Kursdetails per ID (Capability `moodle/course:view` u. a.) |
-    | `core_course_get_contents` | Abschnitte und Aktivitäten eines Kurses |
-    | `core_enrol_get_enrolled_users_with_capability` | Teilnehmende gruppiert nach Capability (nicht im App-Service) |
-    | `core_user_get_users_by_field` | Nutzer nach `id`, `idnumber`, `username` oder `email` |
-    | `core_group_get_group_members` | Mitglieder bestimmter Gruppen (nicht im App-Service) |
-    | `core_cohort_get_cohorts`, `core_cohort_get_cohort_members` | Globale Gruppen (Kohorten), nur relevant falls die HTWG Kohorten pflegt (Capability `moodle/cohort:view`, nicht im App-Service) |
-    | `mod_feedback_get_analysis` | Auswertung einer Feedback-Umfrage ohne Bezug zu Personen |
-    | `mod_quiz_get_quizzes_by_courses`, `mod_quiz_get_user_best_grade` | Tests und beste Bewertung, z. B. für einen Test zur Selbsteinschätzung |
-    | `mod_assign_get_assignments`, `mod_assign_get_grades` | Aufgaben und ihre Bewertungen |
-    | `gradereport_user_get_grades_table` | Bewertungsübersicht als Tabelle |
+    | `core_course_get_courses` | Course details by ID (capability `moodle/course:view` among others) |
+    | `core_course_get_contents` | Sections and activities of a course |
+    | `core_enrol_get_enrolled_users_with_capability` | Participants grouped by capability (not in the app service) |
+    | `core_user_get_users_by_field` | Users by `id`, `idnumber`, `username` or `email` |
+    | `core_group_get_group_members` | Members of specific groups (not in the app service) |
+    | `core_cohort_get_cohorts`, `core_cohort_get_cohort_members` | Site-wide groups (cohorts), only relevant if HTWG maintains cohorts (capability `moodle/cohort:view`, not in the app service) |
+    | `mod_feedback_get_analysis` | Analysis of a feedback survey without reference to individuals |
+    | `mod_quiz_get_quizzes_by_courses`, `mod_quiz_get_user_best_grade` | Quizzes and best grade, e.g. for a self-assessment quiz |
+    | `mod_assign_get_assignments`, `mod_assign_get_grades` | Assignments and their grades |
+    | `gradereport_user_get_grades_table` | Grade overview as a table |
 
-## Anfrage an das Rechenzentrum
+## Request to the computing centre
 
-Diese Liste kann direkt in die Anfrage übernommen werden.
+This list can be copied directly into the request.
 
-**Gewünscht:** ein externer Service „Teamable Analytics“ (Kurzname z. B. `teamable`) mit diesen Funktionen:
+**Requested:** an external service "Teamable Analytics" (short name e.g. `teamable`) with these functions:
 
 ```text
 core_webservice_get_site_info
@@ -245,14 +245,14 @@ mod_feedback_get_responses_analysis
 gradereport_user_get_grade_items
 ```
 
-**Tokens:** Am einfachsten sind Tokens **pro Lehrperson**. Eine Lehrperson mit der Rolle *Trainer/in* (`editingteacher`) hat in ihren eigenen Kursen bereits alle nötigen Rechte. Möglich sind zwei Varianten:
+**Tokens:** The simplest option is tokens **per teacher**. A teacher with the role *Teacher* (`editingteacher`) already has all required permissions in their own courses. There are two variants:
 
-- **Selbst erzeugt:** Das Rechenzentrum erlaubt den Lehrenden, für diesen Service selbst Tokens zu erzeugen (Capability `moodle/webservice:createtoken`). Moodle legt den Token dann automatisch an, sobald die Lehrperson *Profil › Einstellungen › Sicherheitsschlüssel* öffnet. Von dort kopiert sie ihn in Teamable. Der Token läuft nicht ab, bis sie ihn dort zurücksetzt.
-- **Vom Admin ausgestellt:** Das Rechenzentrum stellt die Tokens auf Anfrage aus.
+- **Self-generated:** The computing centre allows teachers to generate tokens for this service themselves (capability `moodle/webservice:createtoken`). Moodle then creates the token automatically as soon as the teacher opens *Profile › Preferences › Security keys*. From there, they copy it into Teamable. The token does not expire until they reset it there.
+- **Issued by the admin:** The computing centre issues the tokens on request.
 
-Die Alternative ist ein **technischer Nutzer**: ein eigenes Moodle-Konto für Teamable mit einem einzigen Token auf dem Server. Seine Rechte lassen sich auf eine Kurskategorie beschränken, und der Token lässt sich auf die IP-Adresse des Teamable-Servers einschränken. Datenschutzrechtlich ist das trotzdem heikler, weil ein Schlüssel viele Kurse öffnet.
+The alternative is a **technical user**: a dedicated Moodle account for Teamable with a single token on the server. Its permissions can be limited to a course category, and the token can be restricted to the IP address of the Teamable server. From a data protection perspective, this is still more delicate, because one key opens many courses.
 
-Die Lehrperson braucht in ihrem Kurs diese Rechte, die die Rolle *Trainer/in* standardmäßig mitbringt:
+In their course, the teacher needs these permissions, which the role *Teacher* has by default:
 
 - `moodle/course:viewparticipants`, `moodle/course:enrolreview`
 - `moodle/course:managegroups`
@@ -260,20 +260,20 @@ Die Lehrperson braucht in ihrem Kurs diese Rechte, die die Rolle *Trainer/in* st
 - `gradereport/user:view`, `moodle/grade:viewall`
 - `mod/feedback:view`, `mod/feedback:viewreports`, `mod/choice:readresponses`
 
-## Beispielaufruf
+## Example call
 
-Echter Aufruf gegen das HTWG-Moodle mit dem Token eines **Studierenden-Accounts** (App-Service), begrenzt auf drei Teilnehmende:
+Real call against the HTWG Moodle with the token of a **student account** (app service), limited to three participants:
 
 ```bash
 curl -s "https://moodle.htwg-konstanz.de/moodle/webservice/rest/server.php" \
   -d wstoken=$MOODLE_TOKEN \
   -d wsfunction=core_enrol_get_enrolled_users \
   -d moodlewsrestformat=json \
-  -d courseid=<kurs-id> \
+  -d courseid=<course-id> \
   -d "options[0][name]=limitnumber" -d "options[0][value]=3"
 ```
 
-Antwort (eine von drei Personen, anonymisiert: Namen, IDs und E-Mail-Adressen ersetzt, Struktur und Feldnamen unverändert):
+Response (one of three people, anonymised: names, IDs and email addresses replaced, structure and field names unchanged):
 
 ```json
 [
@@ -297,158 +297,158 @@ Antwort (eine von drei Personen, anonymisiert: Namen, IDs und E-Mail-Adressen er
 ]
 ```
 
-Aus der Sicht von Studierenden liefert die HTWG-Instanz also nur **ID, Name, E-Mail, Profilbild und Rolle**. Die Rolle heißt an der HTWG „Studierende“, ihr Kurzname ist wie im Moodle-Standard `student`. Felder wie `username`, `idnumber`, `groups` oder `customfields` fehlen. Mit dem Token einer Lehrperson kommen je nach Rechten und Datenschutzeinstellungen weitere Felder hinzu (siehe [Sicht von Lehrenden prüfen](#sicht-von-lehrenden-prufen)).
+From a student's view, the HTWG instance therefore only returns **ID, name, email, profile picture and role**. At HTWG the role is called "Studierende", its short name is `student` as in standard Moodle. Fields such as `username`, `idnumber`, `groups` or `customfields` are missing. With a teacher's token, further fields are added depending on permissions and privacy settings (see [Checking the teacher's view](#checking-the-teachers-view)).
 
-!!! tip "Selbst ausprobieren"
-    Lesende Funktionen lassen sich mit dem eigenen HTWG-Account über den App-Service testen, ohne das Rechenzentrum. Studierende haben in ihren Kursen standardmäßig `moodle/course:viewparticipants`.
+!!! tip "Try it yourself"
+    Read functions can be tested with your own HTWG account via the app service, without the computing centre. Students have `moodle/course:viewparticipants` in their courses by default.
 
-    Den Token so holen, dass das Passwort nicht in der Shell-History landet:
+    Obtain the token in a way that keeps the password out of the shell history:
 
     ```bash
-    read -r -p "Benutzername: " U; read -r -s -p "Passwort: " P; echo
+    read -r -p "Username: " U; read -r -s -p "Password: " P; echo
     MOODLE_TOKEN=$(curl -s https://moodle.htwg-konstanz.de/moodle/login/token.php \
       --data-urlencode "username=$U" --data-urlencode "password=$P" \
       -d service=moodle_mobile_app | sed -E 's/.*"token":"([^"]+)".*/\1/'); unset P
     ```
 
-    Danach den Beispielaufruf oben mit einer eigenen Kurs-ID ausführen (die ID steht in der Kurs-URL `…/course/view.php?id=…`).
+    Then run the example call above with one of your own course IDs (the ID is in the course URL `…/course/view.php?id=…`).
 
-    Der Token bleibt gültig, bis er unter *Profil › Einstellungen › Sicherheitsschlüssel* zurückgesetzt wird. Wer die Moodle-App nutzt, bekommt meist denselben Token wie die App und muss sich dort nach dem Zurücksetzen neu anmelden.
+    The token remains valid until it is reset under *Profile › Preferences › Security keys*. Anyone who uses the Moodle app usually gets the same token as the app and has to log in there again after the reset.
 
-## Sicht von Lehrenden prüfen
+## Checking the teacher's view
 
-Ohne Lehrenden-Account an der HTWG lässt sich die Lehrendensicht mit einem lokalen Moodle 4.5 aus [moodle-docker](https://github.com/moodlehq/moodle-docker) prüfen:
+Without a teacher account at HTWG, the teacher's view can be checked with a local Moodle 4.5 from [moodle-docker](https://github.com/moodlehq/moodle-docker):
 
-1. Moodle 4.5 (`MOODLE_405_STABLE`) mit moodle-docker starten.
-2. Web Services und REST aktivieren. Einen Service mit den Funktionen aus der [Anfrage an das Rechenzentrum](#anfrage-an-das-rechenzentrum) anlegen.
-3. Einen Kurs mit einer Lehrperson (`editingteacher`), einer Lehrperson ohne Bearbeitungsrecht (`teacher`) und drei Studierenden anlegen. Dazu ein Profilfeld, eine Gruppe, eine Abstimmung, eine nicht anonyme Feedback-Umfrage und eine Bewertung.
-4. Für beide Lehrenden einen Token ausstellen und alle Funktionen aufrufen.
-5. Die tatsächlich gelieferten Felder auf dieser Seite eintragen.
+1. Start Moodle 4.5 (`MOODLE_405_STABLE`) with moodle-docker.
+2. Enable web services and REST. Create a service with the functions from the [request to the computing centre](#request-to-the-computing-centre).
+3. Create a course with a teacher (`editingteacher`), a non-editing teacher (`teacher`) and three students. Add a profile field, a group, a choice, a non-anonymous feedback survey and a grade.
+4. Issue a token for both teachers and call all functions.
+5. Record the fields actually returned on this page.
 
-Die Datenschutzeinstellungen der HTWG (z. B. sichtbare Profilfelder) kann das lokale Moodle nicht nachbilden. Eine abschließende Bestätigung braucht daher einen Lehrenden-Account am HTWG-Moodle.
+The local Moodle cannot reproduce HTWG's privacy settings (e.g. visible profile fields). A final confirmation therefore requires a teacher account on the HTWG Moodle.
 
-## Nutzung der Web Services
+## Using the web services
 
-### Fehler erkennen
+### Detecting errors
 
-Moodle meldet Fehler **mit HTTP-Status 200**. Den Fehler erkennt man nur am Inhalt:
+Moodle reports errors **with HTTP status 200**. The error can only be recognised from the content:
 
 ```json
 {"exception": "core\\exception\\moodle_exception", "errorcode": "invalidtoken", "message": "Ungültiges Token - Token wurde nicht gefunden"}
 ```
 
-Ein Client muss daher jede Antwort auf ein Objekt mit `exception` bzw. `errorcode` prüfen, statt sich auf den HTTP-Status zu verlassen. Die Meldungstexte (`message`) sind in der Sprache der Instanz verfasst und eignen sich nicht für Fallunterscheidungen, nur `errorcode` ist stabil.
+A client must therefore check every response for an object with `exception` or `errorcode` instead of relying on the HTTP status. The messages (`message`) are written in the instance's language (German at HTWG, as above) and are not suitable for case distinctions; only `errorcode` is stable.
 
-### Gruppen anlegen
+### Creating groups
 
-Das Zurückschreiben eines Team-Sets besteht aus vier Aufrufen: Gruppierung anlegen, Gruppen anlegen, Gruppen zuordnen, Mitglieder hinzufügen. Dabei gilt:
+Writing back a team set consists of four calls: create grouping, create groups, assign groups, add members. The following applies:
 
-- **Gruppennamen müssen im ganzen Kurs eindeutig sein**, nicht nur innerhalb einer Gruppierung. Das gilt auch für Gruppierungen. Moodle lehnt doppelte Namen ab (*„Group with the same name already exists in the course“*). Gleich benannte Teams aus zwei Team-Sets („Team 1“) brauchen daher ein Präfix, z. B. den Namen des Team-Sets.
-- **Keine Transaktion über alle Aufrufe:** Jeder einzelne Aufruf läuft in einer Datenbank-Transaktion, die Abfolge als Ganzes aber nicht. Bricht sie in der Mitte ab, bleibt ein halber Zustand zurück.
-- **`idnumber` als Schlüssel:** Gruppen und Gruppierungen können eine `idnumber` bekommen, die pro Kurs eindeutig ist, z. B. `teamable-<teamset-id>-<team>`. Vor dem Anlegen mit `core_group_get_course_groups` bzw. `core_group_get_course_groupings` prüfen, was schon existiert, und nur Fehlendes anlegen. Mit `core_group_delete_groups` lassen sich Reste entfernen.
-- **Mitglieder** erneut hinzuzufügen ist unkritisch: `core_group_add_group_members` ignoriert bestehende Mitgliedschaften.
+- **Group names must be unique across the whole course**, not only within a grouping. The same applies to groupings. Moodle rejects duplicate names (*"Group with the same name already exists in the course"*). Identically named teams from two team sets ("Team 1") therefore need a prefix, e.g. the name of the team set.
+- **No transaction across all calls:** Each individual call runs in a database transaction, but the sequence as a whole does not. If it breaks off halfway, a partial state remains.
+- **`idnumber` as key:** Groups and groupings can be given an `idnumber` that is unique per course, e.g. `teamable-<teamset-id>-<team>`. Before creating, use `core_group_get_course_groups` or `core_group_get_course_groupings` to check what already exists and only create what is missing. Leftovers can be removed with `core_group_delete_groups`.
+- **Adding members** again is harmless: `core_group_add_group_members` ignores existing memberships.
 
-### Identität und Aktualität
+### Identity and freshness
 
-- **Stabiler Schlüssel:** Die Moodle-User-ID ist nur innerhalb einer Instanz eindeutig. Ein Nutzer wird daher über *Instanz-URL + User-ID* identifiziert, nicht über die E-Mail-Adresse, die sich ändern kann. LTI (`sub`) und Web Services liefern dieselbe User-ID.
-- **Momentaufnahme:** Ein Abruf gibt den Stand zum Zeitpunkt des Aufrufs wieder. Wer sich danach ein- oder ausschreibt, fehlt bzw. bleibt in den abgerufenen Daten.
+- **Stable key:** The Moodle user ID is only unique within one instance. A user is therefore identified by *instance URL + user ID*, not by the email address, which can change. LTI (`sub`) and web services return the same user ID.
+- **Snapshot:** A fetch reflects the state at the time of the call. Anyone who enrols or unenrols afterwards is missing from or remains in the fetched data.
 
-### Token und Datenschutz
+### Tokens and data protection
 
-- **Tokens sind Zugangsdaten.** Ein Token einer Lehrperson erlaubt, in deren Kursen Teilnehmerdaten zu lesen und Gruppen anzulegen. Ein Moodle-Token läuft **nicht ab**. Er muss deshalb pro Person verschlüsselt gespeichert werden, darf in keiner API-Antwort und keinem Log auftauchen und muss sich von der Lehrperson widerrufen lassen.
-- **Datensparsamkeit:** Mit der Option `userfields` nur die Felder abrufen, die tatsächlich gebraucht werden.
+- **Tokens are credentials.** A teacher's token allows reading participant data and creating groups in their courses. A Moodle token **does not expire**. It must therefore be stored encrypted per person, must not appear in any API response or log, and must be revocable by the teacher.
+- **Data minimisation:** Use the `userfields` option to fetch only the fields that are actually needed.
 
-## Weitere Wege in Moodle
+## Other options in Moodle
 
 ### LTI 1.3 Advantage
 
-Wird Teamable Analytics als LTI-1.3-Tool registriert, starten Lehrende es direkt aus ihrem Moodle-Kurs. Beim Start (Launch) übermittelt Moodle Nutzer, Kurs und Rolle in Standardfeldern (Claims):
+If Teamable Analytics is registered as an LTI 1.3 tool, teachers launch it directly from their Moodle course. On launch, Moodle sends user, course and role in standard fields (claims):
 
-| Angabe | LTI-Claim | Wert in Moodle |
+| Data | LTI claim | Value in Moodle |
 | --- | --- | --- |
-| Nutzer | `sub` | Moodle-User-ID |
-| Kurs | `https://purl.imsglobal.org/spec/lti/claim/context` → `id` | Moodle-Kurs-ID |
-| Rolle | `https://purl.imsglobal.org/spec/lti/claim/roles` | z. B. `…/membership#Instructor`, `…/membership#Learner` |
-| Matrikelnummer o. Ä. | `https://purl.imsglobal.org/spec/lti/claim/lis` → `person_sourcedid` | `idnumber` |
-| Name, E-Mail | `name`, `given_name`, `family_name`, `email` | nur wenn die Datenschutzeinstellungen des Tools es erlauben |
+| User | `sub` | Moodle user ID |
+| Course | `https://purl.imsglobal.org/spec/lti/claim/context` → `id` | Moodle course ID |
+| Role | `https://purl.imsglobal.org/spec/lti/claim/roles` | e.g. `…/membership#Instructor`, `…/membership#Learner` |
+| Student ID number or similar | `https://purl.imsglobal.org/spec/lti/claim/lis` → `person_sourcedid` | `idnumber` |
+| Name, email | `name`, `given_name`, `family_name`, `email` | only if the tool's privacy settings allow it |
 
-Zusätzlich kann Moodle dem Tool zwei Dienste freigeben:
+In addition, Moodle can enable two services for the tool:
 
-**Names and Role Provisioning Services (NRPS)** – Option *„Use this service to retrieve members' information as per privacy settings“*. Das Tool ruft damit die Teilnehmerliste ab:
+**Names and Role Provisioning Services (NRPS)** – option *"Use this service to retrieve members' information as per privacy settings"*. The tool uses it to fetch the participant list:
 
 ```text
-GET …/mod/lti/services.php/CourseSection/{kurs-id}/bindings/{tool-typ-id}/memberships
+GET …/mod/lti/services.php/CourseSection/{course-id}/bindings/{tool-type-id}/memberships
 ```
 
-- Moodle-User-ID, `idnumber`, Rollen und Status
-- Name und E-Mail nur, wenn die Datenschutzeinstellungen des Tools das Übermitteln erlauben (*Name / E-Mail des Nutzers an Tool übermitteln*)
-- Einen Gruppen-Dienst bietet Moodle 4.5 nicht.
+- Moodle user ID, `idnumber`, roles and status
+- Name and email only if the tool's privacy settings allow sending them (*Share launcher's name / email with tool*)
+- Moodle 4.5 does not offer a groups service.
 
-**Assignment and Grade Services (AGS)** – Option *„Use this service for grade sync and column management“*. Das Tool sieht damit aber **nur seine eigenen Bewertungsspalten**: solche, die es selbst angelegt hat, und die seiner LTI-Aktivitäten (`get_lineitems` in `mod/lti/service/gradebookservices`). Bestehende Noten aus Aufgaben oder Tests sind über AGS nicht lesbar.
+**Assignment and Grade Services (AGS)** – option *"Use this service for grade sync and column management"*. With it, however, the tool only sees **its own grade columns**: those it created itself and those of its LTI activities (`get_lineitems` in `mod/lti/service/gradebookservices`). Existing grades from assignments or quizzes cannot be read via AGS.
 
-**Vorteile:**
+**Advantages:**
 
-- Kein Web-Service-Token nötig. Der Zugriff läuft über einen Schlüssel, den Moodle bei der Registrierung kennt.
-- Standard, der genauso in Canvas und anderen LMS funktioniert.
-- Lehrende binden das Tool selbst in ihren Kurs ein. Kurs und Rolle sind beim Start bekannt, ein eigenes Konto in Teamable ist nicht nötig.
+- No web service token needed. Access works via a key that Moodle knows from the registration.
+- A standard that works the same way in Canvas and other LMS.
+- Teachers add the tool to their course themselves. Course and role are known at launch, a separate account in Teamable is not needed.
 
-**Nachteile:**
+**Disadvantages:**
 
-- Liefert nur die Teilnehmerliste und Noten in eigenen Spalten. Keine Umfrage-Antworten, Gruppen oder Profilfelder.
-- Kann keine Teams als Gruppen zurückschreiben.
-- Das Tool muss einmalig vom Moodle-Admin registriert werden.
+- Only provides the participant list and grades in the tool's own columns. No survey responses, groups or profile fields.
+- Cannot write teams back as groups.
+- The tool has to be registered once by the Moodle admin.
 
-!!! note "Nicht verwechseln: „Publish as LTI tool“"
-    Moodle hat auch die Funktion *Veröffentlichen als LTI-Tool* (`enrol_lti`). Damit wird ein Moodle-Kurs selbst zum Tool, das ein **anderes** LMS einbindet. Das ist die umgekehrte Richtung und für Teamable nicht relevant.
+!!! note "Not to be confused with “Publish as LTI tool”"
+    Moodle also has the feature *Publish as LTI tool* (`enrol_lti`). It turns a Moodle course itself into a tool that **another** LMS embeds. That is the opposite direction and not relevant for Teamable.
 
-### CSV-Export und -Import
+### CSV export and import
 
-Lehrende können ohne Admin exportieren:
+Teachers can export without an admin:
 
-- Teilnehmende über *Teilnehmer/innen › Tabellendaten herunterladen als CSV*
-- Bewertungen über *Bewertungen › Export*
+- Participants via *Participants › Download table data as CSV*
+- Grades via *Grades › Export*
 
-Der Rückweg ist nur halb möglich: Der CSV-Import *Gruppen importieren* legt Gruppen und Gruppierungen an, aber **keine Mitglieder**. Erlaubt sind nur Spalten wie `groupname`, `groupingname` und `groupidnumber` (`group/import.php`). Die Mitglieder müssen Lehrende danach von Hand zuordnen.
+The way back only works halfway: the CSV import *Import groups* creates groups and groupings, but **no members**. Only columns such as `groupname`, `groupingname` and `groupidnumber` are allowed (`group/import.php`). Teachers then have to assign the members by hand.
 
-### Eigenes Moodle-Plugin
+### Custom Moodle plugin
 
-Ein lokales Plugin (`local_teamable`) läuft innerhalb von Moodle und kann eigene Web-Service-Funktionen und einen fertigen Service mitbringen (`db/services.php`). Damit lassen sich die Grenzen der Standard-Funktionen umgehen:
+A local plugin (`local_teamable`) runs inside Moodle and can ship its own web service functions and a ready-made service (`db/services.php`). This makes it possible to work around the limits of the standard functions:
 
-- Abstimmungen oder Umfragen für Teamable automatisch im Kurs anlegen.
-- Alle benötigten Daten in einem Aufruf liefern und Gruppen in einem Schritt anlegen, auch in einer Transaktion.
-- Den Zugang selbst regeln, z. B. Tokens automatisch für Lehrende ausstellen.
+- Automatically create choices or feedback surveys for Teamable in the course.
+- Return all required data in one call and create groups in one step, even within one transaction.
+- Handle access itself, e.g. issue tokens to teachers automatically.
 
-Dafür braucht es Entwicklung in PHP nach den Moodle-Regeln. Das Rechenzentrum muss das Plugin installieren und bei jedem Moodle-Upgrade mitpflegen. Für Canvas oder andere LMS ist es nicht nutzbar.
+This requires PHP development following Moodle's guidelines. The computing centre has to install the plugin and maintain it with every Moodle upgrade. It cannot be used for Canvas or other LMS.
 
-### Neue REST API (ab Moodle 5.3)
+### New REST API (from Moodle 5.3)
 
-Moodle 5.3 führt eine neue REST API unter `/api/rest/v2/…` ein, mit Personal Access Tokens, die jeder Nutzer selbst erzeugen kann, und mit OAuth-2-Clients. Kurse, Einschreibungen und Gruppen deckt sie in 5.3 noch nicht ab. Für die HTWG (4.5) ist sie erst nach einem Upgrade relevant.
+Moodle 5.3 introduces a new REST API under `/api/rest/v2/…`, with personal access tokens that every user can generate themselves, and with OAuth 2 clients. In 5.3 it does not yet cover courses, enrolments and groups. For HTWG (4.5), it only becomes relevant after an upgrade.
 
-## Offene Fragen
+## Open questions
 
-- [ ] Welche Felder liefern die Funktionen mit dem Token einer Lehrperson (siehe [Sicht von Lehrenden prüfen](#sicht-von-lehrenden-prufen))?
-- [ ] Richtet das Rechenzentrum einen eigenen externen Service ein, und wie werden die Tokens verteilt (siehe [Anfrage an das Rechenzentrum](#anfrage-an-das-rechenzentrum))?
-- [ ] Werden an der HTWG eigene Profilfelder wie Studiengang oder Semester gepflegt, und ist `idnumber` belegt?
-- [ ] Welche Felder dürfen verarbeitet werden, und wie lange dürfen sie gespeichert werden? Abstimmung mit dem Datenschutz der HTWG.
-- [ ] Wäre das Rechenzentrum bereit, Teamable als LTI-1.3-Tool zu registrieren oder ein Plugin zu installieren?
+- [ ] Which fields do the functions return with a teacher's token (see [Checking the teacher's view](#checking-the-teachers-view))?
+- [ ] Will the computing centre set up a dedicated external service, and how will tokens be distributed (see [Request to the computing centre](#request-to-the-computing-centre))?
+- [ ] Does HTWG maintain custom profile fields such as degree programme or semester, and is `idnumber` populated?
+- [ ] Which fields may be processed, and for how long may they be stored? To be agreed with HTWG's data protection office.
+- [ ] Would the computing centre be willing to register Teamable as an LTI 1.3 tool or to install a plugin?
 
-## Bewertung der Wege
+## Assessment of the options
 
-Bewertet nach den Kriterien aus [Optionen zur Datenübertragung](uebertragungsoptionen.md), bezogen auf das HTWG-Moodle:
+Assessed against the criteria from [Optionen zur Datenübertragung](uebertragungsoptionen.md), with respect to the HTWG Moodle:
 
-| Weg | Umsetzungsaufwand | Flexibilität | Abhängigkeiten | Daten |
+| Option | Implementation effort | Flexibility | Dependencies | Data |
 | --- | --- | --- | --- | --- |
-| **Web Services** | **Gering bis mittel:** einfache HTTP/JSON-Aufrufe. 3–5 Funktionen für den Import, 4 für das Zurückschreiben. | **Moodle-spezifisch:** Für jedes LMS ist ein eigener Zugriff nötig. | **Mittel:** Web Services und REST sind aktiv. Das Rechenzentrum muss einen Service anlegen und Tokens ermöglichen. | Teilnehmende, Umfragen, Noten, Gruppen lesen und schreiben |
-| **LTI 1.3 (NRPS, AGS)** | **Mittel:** Launch mit signierten Tokens, Schlüsselverwaltung, Registrierung | **Hoch:** Standard, den auch Canvas und andere LMS unterstützen | **Mittel:** Das Rechenzentrum muss das Tool registrieren. | Teilnehmerliste mit Rollen, Noten nur in eigenen Spalten, kein Zurückschreiben von Gruppen |
-| **CSV-Export/-Import** | **Gering:** Datei-Upload und Parser | **Hoch:** jedes LMS mit CSV-Export, auch ohne LMS | **Keine** | Teilnehmende und Noten. Gruppen nur ohne Mitglieder zurück, Rest von Hand. |
-| **Eigenes Plugin** | **Hoch:** PHP-Entwicklung nach Moodle-Regeln, Pflege bei jedem Upgrade | **Gering:** nur Moodle | **Hoch:** Das Rechenzentrum muss das Plugin installieren und betreiben. | Alles, auch Umfragen anlegen |
-| **Neue REST API** | – | – | Moodle 5.3, an der HTWG nicht verfügbar | Kurse, Einschreibungen und Gruppen fehlen in 5.3 noch |
+| **Web services** | **Low to medium:** simple HTTP/JSON calls. 3–5 functions for the import, 4 for writing back. | **Moodle-specific:** each LMS needs its own access. | **Medium:** web services and REST are enabled. The computing centre has to create a service and enable tokens. | Participants, surveys, grades, read and write groups |
+| **LTI 1.3 (NRPS, AGS)** | **Medium:** launch with signed tokens, key management, registration | **High:** a standard also supported by Canvas and other LMS | **Medium:** the computing centre has to register the tool. | Participant list with roles, grades only in own columns, no writing back of groups |
+| **CSV export/import** | **Low:** file upload and parser | **High:** any LMS with CSV export, even without an LMS | **None** | Participants and grades. Groups back only without members, the rest by hand. |
+| **Custom plugin** | **High:** PHP development following Moodle's guidelines, maintenance with every upgrade | **Low:** Moodle only | **High:** the computing centre has to install and operate the plugin. | Everything, including creating surveys |
+| **New REST API** | – | – | Moodle 5.3, not available at HTWG | Courses, enrolments and groups still missing in 5.3 |
 
-Die Wege schließen sich nicht aus. LTI eignet sich für den Start aus dem Kurs, die Web Services für den Datenzugriff, CSV als Rückfallebene ohne Freigaben.
+The options are not mutually exclusive. LTI is suitable for launching from the course, the web services for data access, CSV as a fallback without approvals.
 
-## Quellen
+## Sources
 
-### Moodle-Dokumentation (Version 4.5)
+### Moodle documentation (version 4.5)
 
 - [Using web services](https://docs.moodle.org/405/en/Using_web_services)
 - [Mobile web services](https://docs.moodle.org/405/en/Mobile_web_services)
@@ -457,20 +457,20 @@ Die Wege schließen sich nicht aus. LTI eignet sich für den Start aus dem Kurs,
 - [Developer Docs – External Services](https://moodledev.io/docs/4.5/apis/subsystems/external)
 - [Developer Docs – Local plugins](https://moodledev.io/docs/4.5/apis/plugintypes/local)
 
-### Moodle-Quellcode (Branch `MOODLE_405_STABLE`)
+### Moodle source code (branch `MOODLE_405_STABLE`)
 
-- [`lib/db/services.php` – Funktionsdefinitionen mit Capabilities](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/lib/db/services.php)
-- [`lib/db/access.php` – Standardrechte der Rollen](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/lib/db/access.php)
+- [`lib/db/services.php` – function definitions with capabilities](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/lib/db/services.php)
+- [`lib/db/access.php` – default role permissions](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/lib/db/access.php)
 - [`enrol/externallib.php` – `core_enrol_get_enrolled_users`](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/enrol/externallib.php)
-- [`group/externallib.php` – Gruppenfunktionen (Transaktionen, Namensprüfung)](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/group/externallib.php)
-- [`grade/report/user/classes/external/user.php` – Rechteprüfung der Noten](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/grade/report/user/classes/external/user.php)
-- [`mod/lti/locallib.php` – LTI-Claims](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/mod/lti/locallib.php)
+- [`group/externallib.php` – group functions (transactions, name check)](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/group/externallib.php)
+- [`grade/report/user/classes/external/user.php` – permission check for grades](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/grade/report/user/classes/external/user.php)
+- [`mod/lti/locallib.php` – LTI claims](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/mod/lti/locallib.php)
 - [`mod/lti/service/memberships` – Names and Role Provisioning](https://github.com/moodle/moodle/tree/MOODLE_405_STABLE/mod/lti/service/memberships)
 - [`mod/lti/service/gradebookservices` – Assignment and Grade Services](https://github.com/moodle/moodle/tree/MOODLE_405_STABLE/mod/lti/service/gradebookservices)
 
-### Weitere
+### Other
 
 - [Moodle 5.3 – Personal access tokens](https://docs.moodle.org/503/en/Personal_access_tokens)
 - [1EdTech – LTI Names and Role Provisioning Services](https://www.imsglobal.org/spec/lti-nrps/v2p0)
 - [1EdTech – LTI Assignment and Grade Services](https://www.imsglobal.org/spec/lti-ags/v2p0)
-- [moodle-docker – lokale Moodle-Umgebung](https://github.com/moodlehq/moodle-docker)
+- [moodle-docker – local Moodle environment](https://github.com/moodlehq/moodle-docker)
