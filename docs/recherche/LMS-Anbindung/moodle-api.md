@@ -6,14 +6,9 @@ Diese Seite beschreibt, welche Kurs- und Studierendendaten Teamable Analytics au
     - Die **klassischen Moodle Web Services** bieten Funktionen für alle Daten, die wir brauchen: Kurse, Teilnehmende mit Rollen, Gruppen, Profilfelder, Umfrage- und Bewertungsdaten. Außerdem können sie **Teams als Moodle-Gruppen zurückschreiben**.
     - **Verifiziert** ist an der HTWG bisher nur die Sicht von Studierenden: Die Teilnehmerliste enthält dort nur ID, Name, E-Mail, Profilbild und Rolle. Welche weiteren Felder (z. B. `idnumber`, Gruppen, Profilfelder) eine Lehrperson erhält, ist **noch offen**.
     - Im **HTWG-Moodle (4.5.14)** sind Web Services und das REST-Protokoll bereits aktiv. Es fehlt ein eigener externer Service für Teamable, den das Rechenzentrum anlegen muss. Die nötigen Funktionen stehen unter [Anfrage an das Rechenzentrum](#anfrage-an-das-rechenzentrum).
-    - Alle Canvas-Funktionen des UBC-Systems haben eine Moodle-Entsprechung, mit einer Ausnahme: Den Opt-in-Test kann das System nicht selbst anlegen.
-
-| Angabe auf dieser Seite | Wie belegt |
-| --- | --- |
-| Konfiguration der HTWG-Instanz | Öffentliche Endpunkte der HTWG-Instanz abgefragt |
-| Teilnehmerliste aus Studierendensicht | Echter Aufruf an der HTWG (siehe [Beispielaufruf](#beispielaufruf)) |
-| Funktionen, Parameter, Capabilities, LTI-Claims | Moodle-4.5-Quellcode |
-| Rückgabefelder aus Lehrendensicht | Nur laut Moodle-Code möglich, an der HTWG **nicht geprüft** |
+    - Fast alle Canvas-Funktionen des UBC-Systems haben eine Moodle-Entsprechung, mit zwei Ausnahmen:
+        - Für die Anmeldung per OAuth2 gibt es in Moodle 4.5 keinen Ersatz. Den Token holt sich Teamable bei Canvas automatisch über eine Zustimmungsseite. Bei Moodle muss er von Hand übertragen werden, oder ein technischer Nutzer übernimmt den Zugriff.
+        - Den Opt-in-Test kann das System nicht selbst anlegen.
 
 ## Die HTWG-Instanz
 
@@ -45,15 +40,19 @@ curl -s "https://moodle.htwg-konstanz.de/moodle/lib/ajax/service-nologin.php" \
 
 ## Ablauf
 
+Das Diagramm zeigt den Ablauf des UBC-Systems, übertragen auf Moodle. Angenommen ist ein Login per LTI und der Datenzugriff über Web Services mit dem Token der Lehrperson. Die Algorithmus-API ist als Ziel eingezeichnet: Im UBC-Code ist ihr Aufruf auskommentiert, stattdessen bildet das Backend selbst einfache Paare („Study Buddy“).
+
 ```mermaid
 sequenceDiagram
     actor L as Lehrperson
+    participant ML as Moodle (Kurs)
     participant T as Teamable Backend
     participant M as Moodle (Web Services)
     participant A as Algorithmus-API
 
-    L->>T: Kurs auswählen
-    T->>M: core_enrol_get_users_courses
+    L->>ML: Teamable im Kurs öffnen
+    ML->>T: LTI-Launch: User-ID, Kurs-ID, Rolle
+    L->>T: Studierende importieren
     T->>M: core_enrol_get_enrolled_users
     M-->>T: Teilnehmende mit Rollen (weitere Felder je nach Rechten)
     T->>M: mod_choice_get_choice_results / mod_feedback_get_responses_analysis / gradereport_user_get_grade_items
@@ -205,10 +204,10 @@ gradereport_user_get_grade_items
 
 **Tokens:** Am einfachsten sind Tokens **pro Lehrperson**. Eine Lehrperson mit der Rolle *Trainer/in* hat in ihren eigenen Kursen bereits alle nötigen Rechte. Möglich sind zwei Varianten:
 
-- **Selbst erzeugt:** Das Rechenzentrum erlaubt den Lehrenden, für diesen Service selbst Tokens zu erzeugen (Capability `moodle/webservice:createtoken`). Die Lehrperson trägt ihren Token dann in Teamable ein.
+- **Selbst erzeugt:** Das Rechenzentrum erlaubt den Lehrenden, für diesen Service selbst Tokens zu erzeugen (Capability `moodle/webservice:createtoken`). Moodle legt den Token dann automatisch an, sobald die Lehrperson *Profil › Einstellungen › Sicherheitsschlüssel* öffnet. Von dort kopiert sie ihn in Teamable. Der Token läuft nicht ab, bis sie ihn dort zurücksetzt.
 - **Vom Admin ausgestellt:** Das Rechenzentrum stellt die Tokens auf Anfrage aus.
 
-Ein technischer Nutzer mit Rechten auf alle Kurse wäre die Alternative, ist aber datenschutzrechtlich deutlich heikler.
+Die Alternative ist ein **technischer Nutzer**: ein eigenes Moodle-Konto für Teamable mit einem einzigen Token auf dem Server. Seine Rechte lassen sich auf eine Kurskategorie beschränken, und der Token lässt sich auf die IP-Adresse des Teamable-Servers einschränken. Datenschutzrechtlich ist das trotzdem heikler, weil ein Schlüssel viele Kurse öffnet.
 
 Die Lehrperson braucht in ihrem Kurs diese Rechte, die die Trainer-Rolle standardmäßig mitbringt:
 
@@ -313,7 +312,7 @@ Lehrende können ohne Admin exportieren:
 - Teilnehmende über *Teilnehmer/innen › Tabellendaten herunterladen als CSV*
 - Bewertungen über *Bewertungen › Export*
 
-Gruppen lassen sich über den CSV-Import *Gruppen importieren* wieder einspielen. Das ist der manuelle Weg, falls kein API-Zugang gewährt wird.
+Der Rückweg ist nur halb möglich: Der CSV-Import *Gruppen importieren* legt Gruppen und Gruppierungen an, aber **keine Mitglieder**. Erlaubt sind nur Spalten wie `groupname`, `groupingname` und `groupidnumber` (`group/import.php`). Die Mitglieder müssen Lehrende danach von Hand zuordnen. Das ist der manuelle Weg, falls kein API-Zugang gewährt wird.
 
 ### Neue REST API (ab Moodle 5.3)
 
@@ -321,10 +320,12 @@ Moodle 5.3 führt eine neue REST API unter `/api/rest/v2/…` ein, mit Personal 
 
 ## Abgleich mit dem bestehenden UBC-System
 
-Das UBC-Backend greift über die Bibliothek `canvasapi` auf Canvas zu (`src/app/canvas/`). Für jede dieser Funktionen gibt es eine Moodle-Entsprechung:
+Das UBC-Backend ist auf drei Wegen mit Canvas verbunden: Login per LTI 1.3 (`src/lti/`), Token per OAuth2 (`src/canvas_oauth/`) und Datenzugriff über die Bibliothek `canvasapi` (`src/app/canvas/`). Die Tabelle zeigt die Moodle-Entsprechung für jeden dieser Teile:
 
 | Funktion im UBC-System | Canvas-Aufruf | Entsprechung in Moodle |
 | --- | --- | --- |
+| Login aus dem Kurs (`src/lti/views.py`) | LTI-Launch mit den Canvas-Zusatzfeldern `canvas_course_id` und `canvas_user_id` | LTI-Launch mit den Standardfeldern `sub` (User-ID) und `context.id` (Kurs-ID), siehe [LTI 1.3](#lti-13-advantage-names-and-role-provisioning-services). Teamable muss vom Rechenzentrum als LTI-Tool registriert werden. |
+| API-Zugang (`src/canvas_oauth/`) | OAuth2: Zustimmungsseite, Token kommt automatisch und wird über einen Refresh-Token erneuert | **Keine Entsprechung** in Moodle 4.5. Der Token wird von Hand übertragen (*Profil › Einstellungen › Sicherheitsschlüssel*), oder ein technischer Nutzer übernimmt den Zugriff. |
 | Studierende importieren (`import_students.py`) | `course.get_enrollments(type=["StudentEnrollment"])` | `core_enrol_get_enrolled_users` mit `onlyactive`, gefiltert auf Rolle `student` |
 | Opt-in-Test anlegen (`opt_in_quiz.py`) | `course.create_quiz(...)` | **Keine Entsprechung** – `core_courseformat_create_module` unterstützt in 4.5 nur Unterabschnitte, keine Abstimmungen oder Umfragen. Die Lehrperson legt eine *Abstimmung* manuell an. |
 | Opt-in auswerten (`import_students.py`) | `quiz.get_submissions()` | `mod_choice_get_choice_results` |
@@ -366,8 +367,12 @@ Ein Client muss daher jede Antwort auf ein Objekt mit `exception` bzw. `errorcod
 
 Der Export besteht aus vier Aufrufen: Gruppierung anlegen, Gruppen anlegen, Gruppen zuordnen, Mitglieder hinzufügen. Jeder einzelne Aufruf läuft in Moodle in einer Datenbank-Transaktion, die Abfolge als Ganzes aber nicht. Bricht der Export in der Mitte ab, bleibt ein halber Zustand zurück. Ein zweiter Versuch scheitert dann: Moodle lehnt Gruppen und Gruppierungen mit bereits vergebenem Namen ab (*„Group with the same name already exists in the course“*).
 
+!!! warning "Gruppennamen müssen im ganzen Kurs eindeutig sein"
+    Das UBC-System nennt die Teams in jedem Team-Set gleich: „Team 1“, „Team 2“ usw. (`src/app/services/team_generation.py`). In Canvas ist das kein Problem, weil Gruppennamen nur innerhalb einer Gruppenkategorie eindeutig sein müssen. Moodle verlangt eindeutige Gruppennamen im **ganzen Kurs**. Schon der Export eines zweiten Team-Sets würde deshalb scheitern, nicht erst ein abgebrochener Export. Die Gruppennamen brauchen ein Präfix aus dem Team-Set, z. B. „Study Buddy - 2 · Team 1“.
+
 Empfehlung:
 
+- Gruppennamen mit dem Namen des Team-Sets als Präfix bilden (siehe oben).
 - Jeder Gruppe und Gruppierung eine **eindeutige `idnumber`** aus Teamable mitgeben, z. B. `teamable-<teamset-id>-<team-slug>`. Die `idnumber` ist in Moodle pro Kurs eindeutig.
 - Vor dem Anlegen mit `core_group_get_course_groups` bzw. `core_group_get_course_groupings` prüfen, was schon existiert, und nur Fehlendes anlegen.
 - Mitglieder erneut hinzuzufügen ist unkritisch: `core_group_add_group_members` ignoriert bestehende Mitgliedschaften.
@@ -379,7 +384,7 @@ Empfehlung:
 
 ### Sicherheit und Datenschutz
 
-- **Tokens sind Zugangsdaten.** Ein Token pro Lehrperson erlaubt Teamable, in deren Kursen Gruppen anzulegen und Teilnehmerdaten zu lesen. Im UBC-Modell liegt er bisher als einfaches Textfeld in `Course.lms_access_token`. Er muss verschlüsselt gespeichert werden, darf in keiner API-Antwort und keinem Log auftauchen und muss sich von der Lehrperson widerrufen lassen.
+- **Tokens sind Zugangsdaten.** Ein Token pro Lehrperson erlaubt Teamable, in deren Kursen Gruppen anzulegen und Teilnehmerdaten zu lesen. Das UBC-System speichert den Canvas-Token pro Person in `CanvasOAuth2Token` (`src/canvas_oauth/`). Der ist kurzlebig und wird über einen Refresh-Token erneuert. Ein Moodle-Token läuft dagegen **nicht ab**. Er muss deshalb pro Person verschlüsselt gespeichert werden, darf in keiner API-Antwort und keinem Log auftauchen und muss sich von der Lehrperson widerrufen lassen. Das Feld `Course.lms_access_token` ist dafür ungeeignet: Es hängt am Kurs statt an der Person und ist ein einfaches Textfeld.
 - **Datensparsamkeit:** Mit der Option `userfields` nur die Felder abrufen, die der Algorithmus tatsächlich braucht, und nur diese speichern.
 - **Löschung:** Teilnehmerdaten eines Kurses werden gelöscht, sobald die Teams exportiert sind bzw. der Kurs endet. Die konkrete Frist ist mit dem Datenschutz abzustimmen.
 
@@ -394,7 +399,7 @@ Empfehlung:
 - [ ] Welche Felder liefert `core_enrol_get_enrolled_users` mit dem Token einer Lehrperson (siehe [Beispielaufruf](#beispielaufruf))?
 - [ ] Werden an der HTWG eigene Profilfelder wie Studiengang oder Semester gepflegt, und ist `idnumber` belegt?
 - [ ] Welche Felder dürfen wir verarbeiten, und wie lange dürfen wir sie speichern? Abstimmung mit dem Datenschutz der HTWG.
-- [ ] Soll Teamable zusätzlich als LTI-Tool registriert werden (Login aus dem Kurs heraus)?
+- [ ] Soll Teamable zusätzlich als LTI-1.3-Tool in Moodle registriert werden? Dann starten Lehrende Teamable direkt aus dem Moodle-Kurs, ohne eigenes Konto, und Teamable kennt Kurs und Rolle automatisch. Dafür muss das Rechenzentrum das Tool registrieren.
 
 ## Fazit
 
@@ -402,7 +407,7 @@ Empfehlung:
 | --- | --- |
 | Umsetzungsaufwand | **Gering bis mittel** – einfache HTTP/JSON-Aufrufe. Für den Import reichen 2–3 Funktionen, für den Team-Export 4. |
 | Flexibilität | **Moodle-spezifisch** – pro LMS ist ein eigener Adapter nötig. LTI wäre LMS-unabhängig, deckt aber nur die Teilnehmerliste ab. |
-| Abhängigkeiten | **Mittel** – Web Services und REST sind an der HTWG bereits aktiv. Das Rechenzentrum muss nur einen Service anlegen und Tokens ermöglichen. |
+| Abhängigkeiten | **Mittel** – Web Services und REST sind an der HTWG bereits aktiv. Das Rechenzentrum muss einen Service anlegen und Tokens ermöglichen. Für den Login aus dem Kurs heraus muss es Teamable außerdem als LTI-Tool registrieren. |
 
 Technisch bietet sich an, die Zugriffe in `src/app/canvas/` hinter eine gemeinsame LMS-Schnittstelle zu legen, mit je einer Implementierung für Canvas und Moodle. So bleibt das System offen für weitere Datenquellen wie den CSV-Import.
 
