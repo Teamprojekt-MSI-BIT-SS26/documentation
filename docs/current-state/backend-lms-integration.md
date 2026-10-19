@@ -1,24 +1,10 @@
 # Teamable: LMS-Anbindung (Ist-Stand)
 
-Diese Doku beschreibt, **was Teamable heute vom LMS braucht** und wie die Anbindung im Code umgesetzt ist. Sie ist die Grundlage für Task #9 („Moodle-API untersuchen“). Eine vollständige Code-Doku ist nicht das Ziel. Behandelt wird nur, was mit der LMS-Anbindung zu tun hat.
+Diese Doku beschreibt, **was Teamable heute vom LMS braucht** und wie die Anbindung im Code umgesetzt ist. Eine vollständige Code-Doku ist nicht das Ziel. Behandelt wird nur, was mit der LMS-Anbindung zu tun hat.
 
 - **Stand:** `teamable-backend` @ `183a36c`, `teamable-frontend` @ `98ce1c8`
 - **Einziges unterstütztes LMS:** Canvas (`LMSTypeOptions.CANVAS`)
 - Pfade ohne Präfix beziehen sich auf `teamable-backend/`. Pfade mit `frontend:` beziehen sich auf `teamable-frontend/`.
-
----
-
-## Inhalt
-
-1. [Kurzfassung: Was braucht Teamable vom LMS?](#1-kurzfassung-was-braucht-teamable-vom-lms)
-2. [Architektur](#2-architektur)
-3. [Canvas-Anbindung im Code](#3-canvas-anbindung-im-code)
-4. [Datenmodell mit LMS-Bezug](#4-datenmodell-mit-lms-bezug)
-5. [Ablauf aus Sicht der Lehrenden](#5-ablauf-aus-sicht-der-lehrenden)
-6. [Anmeldung, Rechte und Token-Speicherung](#6-anmeldung-rechte-und-token-speicherung)
-7. [Daten für die Team-Bildung](#7-daten-für-die-team-bildung)
-8. [Lokales Setup (mit und ohne Canvas)](#8-lokales-setup-mit-und-ohne-canvas)
-9. [Auffälligkeiten und offene Punkte](#9-auffälligkeiten-und-offene-punkte)
 
 ---
 
@@ -40,7 +26,7 @@ Das ist die LMS-neutrale Checkliste. Für Moodle muss für jede Zeile ein Gegens
 
 **Nicht** aus dem LMS kommen derzeit: Sections, Beziehungen (Friend/Enemy), Profil-Attribute außer Noten und Projekte.
 
-Die vollständige Liste der angefragten OAuth-Scopes steht in [`src/canvas_oauth/canvas.py`](../src/canvas_oauth/canvas.py) (`SCOPES_USED`). Sie entspricht genau den Endpunkten in der Tabelle oben plus `GET /api/v1/courses/:id`.
+Die vollständige Liste der angefragten OAuth-Scopes steht in [`src/canvas_oauth/canvas.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/canvas_oauth/canvas.py) (`SCOPES_USED`). Sie entspricht genau den Endpunkten in der Tabelle oben plus `GET /api/v1/courses/:id`.
 
 ---
 
@@ -84,19 +70,19 @@ flowchart LR
 
 - **Nur das Backend spricht mit dem LMS.** Das Frontend ruft ausschließlich die Teamable-REST-API auf (`frontend: src/app/(providers)/query-client-provider.tsx`, Basis-URL `BACKEND_BASE_URI`). Die einzige Ausnahme sind reine Links ins LMS (Opt-in-Quiz, Nutzerprofil).
 - Es gibt **drei Kanäle** zum LMS:
-  1. **LTI 1.3** (Browser → Backend, eingehend): Start und Identität. Library: `PyLTI1p3`. Code: [`src/lti/`](../src/lti/)
-  2. **OAuth2** (Browser-Redirects + Server→Canvas): Zugriffsschlüssel. Code: [`src/canvas_oauth/`](../src/canvas_oauth/), eine eingebettete und angepasste Kopie von *django-canvas-oauth*
-  3. **REST-API** (Server→Canvas, ausgehend): Daten lesen und schreiben. Library: `canvasapi==3.2.0`. Code: [`src/app/canvas/`](../src/app/canvas/)
+  1. **LTI 1.3** (Browser → Backend, eingehend): Start und Identität. Library: `PyLTI1p3`. Code: [`src/lti/`](https://github.com/Teamable-Analytics/teamable-backend/tree/183a36c/src/lti)
+  2. **OAuth2** (Browser-Redirects + Server→Canvas): Zugriffsschlüssel. Code: [`src/canvas_oauth/`](https://github.com/Teamable-Analytics/teamable-backend/tree/183a36c/src/canvas_oauth), eine eingebettete und angepasste Kopie von *django-canvas-oauth*
+  3. **REST-API** (Server→Canvas, ausgehend): Daten lesen und schreiben. Library: `canvasapi==3.2.0`. Code: [`src/app/canvas/`](https://github.com/Teamable-Analytics/teamable-backend/tree/183a36c/src/app/canvas)
 - Alle LMS-Aktionen sind **synchron und vom Nutzer ausgelöst** (Button → POST → Canvas-Aufrufe → Antwort). Es gibt keine Hintergrundjobs, keinen Sync per Cron und keine Webhooks.
 - Django-Apps: `accounts` (User, E-Mail-Login), `app` (Domäne + Canvas-Code), `lti`, `canvas_oauth`, `teamable` (Settings und URLs).
 
-**URL-Einstieg** ([`src/teamable/urls.py`](../src/teamable/urls.py))
+**URL-Einstieg** ([`src/teamable/urls.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/teamable/urls.py))
 
 | Präfix | App |
 |--------|-----|
 | `/lti/` | LTI Login/Launch |
 | `/oauth/` | Canvas OAuth (`initiate`, `oauth-callback`) |
-| `/api/v1/` | Kurs-API ([`src/app/urls.py`](../src/app/urls.py)) |
+| `/api/v1/` | Kurs-API ([`src/app/urls.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/urls.py)) |
 | `/api/v1/accounts/` | User, Sign-up, Log-in |
 | `/admin/` | Django-Admin (Org, Kurs, CourseMember anlegen, JWT erzeugen) |
 
@@ -108,19 +94,19 @@ flowchart LR
 
 | Datei | Zweck |
 |-------|-------|
-| [`src/lti/views.py`](../src/lti/views.py) | LTI-OIDC-Login und LTI-Launch. Legt User, Kurs und CourseMember an. |
-| [`src/lti/lti_util.py`](../src/lti/lti_util.py) | Lädt die LTI-Tool-Konfiguration aus ENV oder einer JSON-Datei |
-| [`src/canvas_oauth/oauth.py`](../src/canvas_oauth/oauth.py) | `get_oauth_token`, `handle_missing_token`, `oauth_callback`, `initiate_oauth_check`, `refresh_oauth_token` |
-| [`src/canvas_oauth/canvas.py`](../src/canvas_oauth/canvas.py) | Baut die Autorisierungs-URL (inkl. Scopes) und holt Tokens per `POST /login/oauth2/token` |
-| [`src/canvas_oauth/middleware.py`](../src/canvas_oauth/middleware.py) | Fängt `MissingTokenError` ab und startet den OAuth-Flow |
-| [`src/canvas_oauth/models.py`](../src/canvas_oauth/models.py) | `CanvasOAuth2Token` (Token-Speicher) |
-| [`src/app/canvas/canvas_api.py`](../src/app/canvas/canvas_api.py) | `init_canvas()` gibt einen `canvasapi.Canvas(org.lms_api_url, oauth_token)` zurück |
-| [`src/app/canvas/import_students.py`](../src/app/canvas/import_students.py) | Studierenden-Import (inkl. Opt-in-Filter) |
-| [`src/app/canvas/import_attribute.py`](../src/app/canvas/import_attribute.py) | Noten-Import → Attribut „über/unter Median“ |
-| [`src/app/canvas/opt_in_quiz.py`](../src/app/canvas/opt_in_quiz.py) | Opt-in-Quiz in Canvas anlegen |
-| [`src/app/canvas/export_team.py`](../src/app/canvas/export_team.py) | Team-Set als Canvas-Gruppen exportieren |
-| [`src/app/views/course.py`](../src/app/views/course.py) | REST-Endpunkte, die die Funktionen oben aufrufen |
-| [`src/teamable/settings.py`](../src/teamable/settings.py) | `CANVAS_BASE_URL`, `CANVAS_OAUTH_*`, `LTI_ENABLED`, `SESSION_COOKIE_SAMESITE=None`, `SECURE_PROXY_SSL_HEADER` |
+| [`src/lti/views.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/lti/views.py) | LTI-OIDC-Login und LTI-Launch. Legt User, Kurs und CourseMember an. |
+| [`src/lti/lti_util.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/lti/lti_util.py) | Lädt die LTI-Tool-Konfiguration aus ENV oder einer JSON-Datei |
+| [`src/canvas_oauth/oauth.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/canvas_oauth/oauth.py) | `get_oauth_token`, `handle_missing_token`, `oauth_callback`, `initiate_oauth_check`, `refresh_oauth_token` |
+| [`src/canvas_oauth/canvas.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/canvas_oauth/canvas.py) | Baut die Autorisierungs-URL (inkl. Scopes) und holt Tokens per `POST /login/oauth2/token` |
+| [`src/canvas_oauth/middleware.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/canvas_oauth/middleware.py) | Fängt `MissingTokenError` ab und startet den OAuth-Flow |
+| [`src/canvas_oauth/models.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/canvas_oauth/models.py) | `CanvasOAuth2Token` (Token-Speicher) |
+| [`src/app/canvas/canvas_api.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/canvas_api.py) | `init_canvas()` gibt einen `canvasapi.Canvas(org.lms_api_url, oauth_token)` zurück |
+| [`src/app/canvas/import_students.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/import_students.py) | Studierenden-Import (inkl. Opt-in-Filter) |
+| [`src/app/canvas/import_attribute.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/import_attribute.py) | Noten-Import → Attribut „über/unter Median“ |
+| [`src/app/canvas/opt_in_quiz.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/opt_in_quiz.py) | Opt-in-Quiz in Canvas anlegen |
+| [`src/app/canvas/export_team.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/export_team.py) | Team-Set als Canvas-Gruppen exportieren |
+| [`src/app/views/course.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/views/course.py) | REST-Endpunkte, die die Funktionen oben aufrufen |
+| [`src/teamable/settings.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/teamable/settings.py) | `CANVAS_BASE_URL`, `CANVAS_OAUTH_*`, `LTI_ENABLED`, `SESSION_COOKIE_SAMESITE=None`, `SECURE_PROXY_SSL_HEADER` |
 
 Jede Funktion in `app/canvas/*` prüft zuerst `course.organization.lms_type == CANVAS` und **kehrt sonst ohne Aktion zurück**. Das ist die einzige Abstraktion, die es heute gibt. Ein LMS-Interface oder Adapter existiert noch nicht.
 
@@ -153,7 +139,7 @@ sequenceDiagram
     F->>F: Cookie "token" setzen, Redirect /course/{pk} → /course/{pk}/setup
 ```
 
-**Details zum LTI-Launch** ([`src/lti/views.py`](../src/lti/views.py) `launch`)
+**Details zum LTI-Launch** ([`src/lti/views.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/lti/views.py) `launch`)
 
 - Ausgewertete Claims:
   - `https://purl.imsglobal.org/spec/lti/claim/roles` → Rolle
@@ -169,7 +155,7 @@ sequenceDiagram
 - In `DEBUG` wird `validate_deployment` übersprungen.
 - Die LTI-Konfiguration (Issuer, Client-ID, Keys, Endpunkte) kommt entweder aus `LTI_CONF_JSON` + `LTI_CONF_JSON_PRIVATE_KEYS` (ENV) oder aus `LTI_CONF_FOLDER/LTI_CONF_FILE_NAME` (Datei, Default `src/lti/config/lti_config_settings.json`, steht in `.gitignore`). Ein Beispiel liegt nicht im Repo.
 
-**Details zu OAuth2** ([`src/canvas_oauth/`](../src/canvas_oauth/))
+**Details zu OAuth2** ([`src/canvas_oauth/`](https://github.com/Teamable-Analytics/teamable-backend/tree/183a36c/src/canvas_oauth))
 
 - Endpunkte: `{CANVAS_OAUTH_CANVAS_DOMAIN}/login/oauth2/auth` und `/login/oauth2/token`. Die Domain kommt aus der ENV-Variablen `CANVAS_BASE_URL` und ist global, nicht pro Organisation.
 - Scopes: siehe `SCOPES_USED` (Abschnitt 1)
@@ -241,7 +227,7 @@ Ohne LMS-Bezug, aber relevant: `Section` (wird **nicht** aus Canvas importiert, 
 
 ## 5. Ablauf aus Sicht der Lehrenden
 
-Alle Kurs-Endpunkte liegen in [`src/app/views/course.py`](../src/app/views/course.py) (`CourseViewSet`, Router-Präfix `/api/v1/courses/`). Das Frontend sendet `Authorization: Token <token>` aus dem Cookie.
+Alle Kurs-Endpunkte liegen in [`src/app/views/course.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/views/course.py) (`CourseViewSet`, Router-Präfix `/api/v1/courses/`). Das Frontend sendet `Authorization: Token <token>` aus dem Cookie.
 
 | # | Schritt in der Oberfläche | Frontend (Seite / Hook) | Backend-Endpunkt | LMS-Kontakt |
 |---|---|---|---|---|
@@ -288,7 +274,7 @@ Solche User haben **keinen** `CanvasOAuth2Token`. Sobald die Organisation vom Ty
 
 ### 6.3 Rechte
 
-- [`src/app/permissions.py`](../src/app/permissions.py) `IsCourseInstructor`: `has_permission` gibt immer `True` zurück. Die eigentliche Prüfung erfolgt auf Objektebene über `Course.has_edit_permission`. Erlaubt sind Superuser, `is_staff` und User mit `CourseMember(role=Instructor)` im Kurs.
+- [`src/app/permissions.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/permissions.py) `IsCourseInstructor`: `has_permission` gibt immer `True` zurück. Die eigentliche Prüfung erfolgt auf Objektebene über `Course.has_edit_permission`. Erlaubt sind Superuser, `is_staff` und User mit `CourseMember(role=Instructor)` im Kurs.
 - Weil die Kurs-Endpunkte `get_object()` aufrufen, ist jeder Kurs-Endpunkt so geschützt.
 - Auf Canvas-Seite gelten zusätzlich die Rechte der Lehrperson (OAuth läuft im Namen des Users) und die angefragten Scopes.
 - Authentifizierung in DRF: `BasicAuthentication` + `TokenAuthentication` (die Session wird für die API nicht genutzt).
@@ -317,7 +303,7 @@ Heute fließen genau **zwei Arten von LMS-Daten** ein:
 
 Sections, Beziehungen, Projekte und Profil-Fragen spielen beim aktuellen Algorithmus keine Rolle.
 
-### 7.1 Noten-Import ([`import_attribute.py`](../src/app/canvas/import_attribute.py))
+### 7.1 Noten-Import ([`import_attribute.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/import_attribute.py))
 
 Für **jedes** Assignment mit `grading_type` ∈ {`points`, `percent`} gilt:
 
@@ -329,7 +315,7 @@ Für **jedes** Assignment mit `grading_type` ∈ {`points`, `percent`} gilt:
 
 Gespeichert wird also **keine Rohnote**, sondern nur die binäre Kategorie über oder unter dem Median.
 
-### 7.2 Team-Generierung ([`src/app/services/team_generation.py`](../src/app/services/team_generation.py))
+### 7.2 Team-Generierung ([`src/app/services/team_generation.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/services/team_generation.py))
 
 - Eingabe: ein Grade-Attribut (im Dialog „Select a grade source“ ausgewählt).
 - Liste = alle *Above*-Studierenden, danach alle *Below*-Studierenden (innerhalb der Gruppen nicht nach Score sortiert).
@@ -387,7 +373,7 @@ Danach `http://localhost:3000/accounts/signup?token=<JWT>` aufrufen, registriere
   2. **API Key** (OAuth2) mit Redirect-URI `…/oauth/oauth-callback` und aktivierten Scopes laut `SCOPES_USED`
 - Die passende `lti_config_settings.json` (PyLTI1p3-Format, inkl. Private Key) unter `src/lti/config/` ablegen.
 - In der Organisation `LMS Type = CANVAS` und `LMS API URL = CANVAS_BASE_URL` setzen.
-- Eine lokale Canvas-Instanz per Docker ist in [`docs/local_canvas.md`](local_canvas.md) beschrieben. Die Anleitung stammt aus einem anderen Projekt und muss angepasst werden.
+- Eine lokale Canvas-Instanz per Docker ist in [`docs/local_canvas.md`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/docs/local_canvas.md) beschrieben. Die Anleitung stammt aus einem anderen Projekt und muss angepasst werden.
 - Der README-Schritt „LMS Access Token in den Course eintragen“ ist **veraltet**. Dieses Feld wird nicht mehr genutzt, der Zugriff läuft ausschließlich über OAuth.
 
 ### 8.3 Docker / Produktion
