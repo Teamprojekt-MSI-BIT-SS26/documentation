@@ -1,192 +1,192 @@
-# Teamable: LMS-Anbindung (Ist-Stand)
+# Backend: LMS integration
 
-Diese Doku beschreibt, **was Teamable heute vom LMS braucht** und wie die Anbindung im Code umgesetzt ist. Eine vollständige Code-Doku ist nicht das Ziel. Behandelt wird nur, was mit der LMS-Anbindung zu tun hat.
+This page describes **what Teamable currently needs from the LMS** and how the integration is implemented in the code. It is not meant to be complete code documentation. It only covers what relates to the LMS integration.
 
-- **Stand:** `teamable-backend` @ `183a36c`, `teamable-frontend` @ `98ce1c8`
-- **Einziges unterstütztes LMS:** Canvas (`LMSTypeOptions.CANVAS`)
-- Pfade ohne Präfix beziehen sich auf `teamable-backend/`. Pfade mit `frontend:` beziehen sich auf `teamable-frontend/`.
+- **Version:** `teamable-backend` @ `183a36c`, `teamable-frontend` @ `98ce1c8`
+- **Only supported LMS:** Canvas (`LMSTypeOptions.CANVAS`)
+- Paths without a prefix refer to `teamable-backend/`. Paths with `frontend:` refer to `teamable-frontend/`.
 
 ---
 
-## 1. Kurzfassung: Was braucht Teamable vom LMS?
+## 1. Summary: What does Teamable need from the LMS?
 
-Das ist die LMS-neutrale Checkliste. Für Moodle muss für jede Zeile ein Gegenstück gefunden werden.
+This is the LMS-neutral checklist. For Moodle, a counterpart has to be found for every row.
 
-| # | Fähigkeit | Wozu | Canvas heute |
+| # | Capability | Purpose | Canvas today |
 |---|-----------|------|--------------|
-| 1 | **Tool-Start aus dem Kurs heraus mit SSO** | Lehrende öffnen Teamable aus dem Kurs. Teamable erfährt dabei, wer sie sind, in welchem Kurs sie sind und welche Rolle sie haben. | LTI 1.3 Launch (OIDC) mit den Custom Claims `canvas_course_id` und `canvas_user_id` |
-| 2 | **API-Zugriff im Namen der Lehrperson** | Alle REST-Aufrufe laufen mit den Rechten der Lehrperson. | OAuth2 Authorization Code Flow mit Refresh Token |
-| 3 | **Studierende eines Kurses auflisten** | Studierende importieren (Name, LMS-User-ID, SIS-ID) | `GET /api/v1/courses/:course_id/enrollments?type[]=StudentEnrollment` |
-| 4 | **Aufgaben eines Kurses auflisten** | Notenquellen finden | `GET /api/v1/courses/:course_id/assignments` |
-| 5 | **Noten je Aufgabe und Studierendem lesen** | Notenbasierte Team-Bildung | `GET /api/v1/courses/:course_id/assignments/:id/submissions` |
-| 6 | **Umfrage oder Quiz im Kurs anlegen** *(optional)* | Opt-in: Studierende stimmen der Teilnahme zu | `POST /api/v1/courses/:course_id/quizzes` + `POST .../questions` (Classic Quizzes) |
-| 7 | **Antworten auf diese Umfrage lesen** *(optional)* | Nur zugestimmte Studierende importieren | `GET .../quizzes/:id`, `.../questions`, `.../submissions`, `GET /api/v1/quiz_submissions/:id/questions` |
-| 8 | **Gruppen anlegen und Mitglieder zuordnen** | Erzeugte Teams zurück ins LMS schreiben | `POST .../group_categories`, `POST /group_categories/:id/groups`, `POST /groups/:id/memberships` |
-| 9 | **Deep Links ins LMS** *(nur UI)* | Links auf Quiz und Nutzerprofil | URL-Muster `{lms}/courses/{id}/quizzes/{id}` bzw. `.../users/{id}` |
+| 1 | **Launching the tool from within the course with SSO** | Teachers open Teamable from the course. Teamable learns who they are, which course they are in and which role they have. | LTI 1.3 launch (OIDC) with the custom claims `canvas_course_id` and `canvas_user_id` |
+| 2 | **API access on behalf of the teacher** | All REST calls run with the teacher's permissions. | OAuth2 authorization code flow with refresh token |
+| 3 | **List the students of a course** | Import students (name, LMS user ID, SIS ID) | `GET /api/v1/courses/:course_id/enrollments?type[]=StudentEnrollment` |
+| 4 | **List the assignments of a course** | Find grade sources | `GET /api/v1/courses/:course_id/assignments` |
+| 5 | **Read grades per assignment and student** | Grade-based team formation | `GET /api/v1/courses/:course_id/assignments/:id/submissions` |
+| 6 | **Create a survey or quiz in the course** *(optional)* | Opt-in: students agree to take part | `POST /api/v1/courses/:course_id/quizzes` + `POST .../questions` (Classic Quizzes) |
+| 7 | **Read the responses to this survey** *(optional)* | Only import students who agreed | `GET .../quizzes/:id`, `.../questions`, `.../submissions`, `GET /api/v1/quiz_submissions/:id/questions` |
+| 8 | **Create groups and assign members** | Write the generated teams back to the LMS | `POST .../group_categories`, `POST /group_categories/:id/groups`, `POST /groups/:id/memberships` |
+| 9 | **Deep links into the LMS** *(UI only)* | Links to the quiz and the user profile | URL pattern `{lms}/courses/{id}/quizzes/{id}` or `.../users/{id}` |
 
-**Nicht** aus dem LMS kommen derzeit: Sections, Beziehungen (Friend/Enemy), Profil-Attribute außer Noten und Projekte.
+Currently **not** taken from the LMS: sections, relationships (friend/enemy), profile attributes other than grades, and projects.
 
-Die vollständige Liste der angefragten OAuth-Scopes steht in [`src/canvas_oauth/canvas.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/canvas_oauth/canvas.py) (`SCOPES_USED`). Sie entspricht genau den Endpunkten in der Tabelle oben plus `GET /api/v1/courses/:id`.
+The complete list of requested OAuth scopes is in [`src/canvas_oauth/canvas.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/canvas_oauth/canvas.py) (`SCOPES_USED`). It matches exactly the endpoints in the table above plus `GET /api/v1/courses/:id`.
 
 ---
 
-## 2. Architektur
+## 2. Architecture
 
 ```mermaid
 flowchart LR
     subgraph LMS["Canvas LMS"]
-        LTI["LTI 1.3<br/>(OIDC Login / Launch)"]
+        LTI["LTI 1.3<br/>(OIDC login / launch)"]
         OAUTH["OAuth2<br/>/login/oauth2/auth<br/>/login/oauth2/token"]
         REST["REST API<br/>/api/v1/..."]
     end
 
     subgraph BE["teamable-backend (Django)"]
         LTIAPP["lti/<br/>views.login, views.launch"]
-        OAUTHAPP["canvas_oauth/<br/>initiate, oauth-callback,<br/>Token-Refresh"]
+        OAUTHAPP["canvas_oauth/<br/>initiate, oauth-callback,<br/>token refresh"]
         CANVAS["app/canvas/*<br/>(canvasapi)"]
         API["app/views/course.py<br/>REST API /api/v1/"]
         DB[("DB<br/>SQLite / Postgres")]
     end
 
     subgraph FE["teamable-frontend (Next.js)"]
-        AUTH["/authenticate<br/>(setzt Cookie)"]
-        UI["Kursseiten<br/>(setup, students, team-sets)"]
+        AUTH["/authenticate<br/>(sets cookie)"]
+        UI["Course pages<br/>(setup, students, team-sets)"]
     end
 
-    Browser((Browser)) -->|Klick im Kurs| LTI
+    Browser((Browser)) -->|Click in course| LTI
     LTI -->|POST /lti/login, /lti/launch| LTIAPP
     LTIAPP --> OAUTHAPP
-    OAUTHAPP <-->|Code ↔ Token| OAUTH
-    OAUTHAPP -->|Redirect mit DRF-Token| AUTH
+    OAUTHAPP <-->|Code ↔ token| OAUTH
+    OAUTHAPP -->|Redirect with DRF token| AUTH
     AUTH --> UI
     UI -->|fetch + Authorization: Token| API
     API --> CANVAS
-    CANVAS -->|Bearer OAuth-Token| REST
+    CANVAS -->|Bearer OAuth token| REST
     API --- DB
     OAUTHAPP --- DB
 ```
 
-**Kernaussagen**
+**Key points**
 
-- **Nur das Backend spricht mit dem LMS.** Das Frontend ruft ausschließlich die Teamable-REST-API auf (`frontend: src/app/(providers)/query-client-provider.tsx`, Basis-URL `BACKEND_BASE_URI`). Die einzige Ausnahme sind reine Links ins LMS (Opt-in-Quiz, Nutzerprofil).
-- Es gibt **drei Kanäle** zum LMS:
-  1. **LTI 1.3** (Browser → Backend, eingehend): Start und Identität. Library: `PyLTI1p3`. Code: [`src/lti/`](https://github.com/Teamable-Analytics/teamable-backend/tree/183a36c/src/lti)
-  2. **OAuth2** (Browser-Redirects + Server→Canvas): Zugriffsschlüssel. Code: [`src/canvas_oauth/`](https://github.com/Teamable-Analytics/teamable-backend/tree/183a36c/src/canvas_oauth), eine eingebettete und angepasste Kopie von *django-canvas-oauth*
-  3. **REST-API** (Server→Canvas, ausgehend): Daten lesen und schreiben. Library: `canvasapi==3.2.0`. Code: [`src/app/canvas/`](https://github.com/Teamable-Analytics/teamable-backend/tree/183a36c/src/app/canvas)
-- Alle LMS-Aktionen sind **synchron und vom Nutzer ausgelöst** (Button → POST → Canvas-Aufrufe → Antwort). Es gibt keine Hintergrundjobs, keinen Sync per Cron und keine Webhooks.
-- Django-Apps: `accounts` (User, E-Mail-Login), `app` (Domäne + Canvas-Code), `lti`, `canvas_oauth`, `teamable` (Settings und URLs).
+- **Only the backend talks to the LMS.** The frontend only calls the Teamable REST API (`frontend: src/app/(providers)/query-client-provider.tsx`, base URL `BACKEND_BASE_URI`). The only exception are plain links into the LMS (opt-in quiz, user profile).
+- There are **three channels** to the LMS:
+  1. **LTI 1.3** (browser → backend, incoming): launch and identity. Library: `PyLTI1p3`. Code: [`src/lti/`](https://github.com/Teamable-Analytics/teamable-backend/tree/183a36c/src/lti)
+  2. **OAuth2** (browser redirects + server → Canvas): access key. Code: [`src/canvas_oauth/`](https://github.com/Teamable-Analytics/teamable-backend/tree/183a36c/src/canvas_oauth), an embedded and modified copy of *django-canvas-oauth*
+  3. **REST API** (server → Canvas, outgoing): reading and writing data. Library: `canvasapi==3.2.0`. Code: [`src/app/canvas/`](https://github.com/Teamable-Analytics/teamable-backend/tree/183a36c/src/app/canvas)
+- All LMS actions are **synchronous and triggered by the user** (button → POST → Canvas calls → response). There are no background jobs, no cron-based sync and no webhooks.
+- Django apps: `accounts` (user, email login), `app` (domain + Canvas code), `lti`, `canvas_oauth`, `teamable` (settings and URLs).
 
-**URL-Einstieg** ([`src/teamable/urls.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/teamable/urls.py))
+**URL entry points** ([`src/teamable/urls.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/teamable/urls.py))
 
-| Präfix | App |
+| Prefix | App |
 |--------|-----|
-| `/lti/` | LTI Login/Launch |
+| `/lti/` | LTI login/launch |
 | `/oauth/` | Canvas OAuth (`initiate`, `oauth-callback`) |
-| `/api/v1/` | Kurs-API ([`src/app/urls.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/urls.py)) |
-| `/api/v1/accounts/` | User, Sign-up, Log-in |
-| `/admin/` | Django-Admin (Org, Kurs, CourseMember anlegen, JWT erzeugen) |
+| `/api/v1/` | Course API ([`src/app/urls.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/urls.py)) |
+| `/api/v1/accounts/` | User, sign-up, log-in |
+| `/admin/` | Django admin (create org, course, CourseMember, generate JWT) |
 
 ---
 
-## 3. Canvas-Anbindung im Code
+## 3. Canvas integration in the code
 
-### 3.1 Übersicht der Stellen
+### 3.1 Overview of the relevant files
 
-| Datei | Zweck |
+| File | Purpose |
 |-------|-------|
-| [`src/lti/views.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/lti/views.py) | LTI-OIDC-Login und LTI-Launch. Legt User, Kurs und CourseMember an. |
-| [`src/lti/lti_util.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/lti/lti_util.py) | Lädt die LTI-Tool-Konfiguration aus ENV oder einer JSON-Datei |
+| [`src/lti/views.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/lti/views.py) | LTI OIDC login and LTI launch. Creates user, course and CourseMember. |
+| [`src/lti/lti_util.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/lti/lti_util.py) | Loads the LTI tool configuration from ENV or a JSON file |
 | [`src/canvas_oauth/oauth.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/canvas_oauth/oauth.py) | `get_oauth_token`, `handle_missing_token`, `oauth_callback`, `initiate_oauth_check`, `refresh_oauth_token` |
-| [`src/canvas_oauth/canvas.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/canvas_oauth/canvas.py) | Baut die Autorisierungs-URL (inkl. Scopes) und holt Tokens per `POST /login/oauth2/token` |
-| [`src/canvas_oauth/middleware.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/canvas_oauth/middleware.py) | Fängt `MissingTokenError` ab und startet den OAuth-Flow |
-| [`src/canvas_oauth/models.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/canvas_oauth/models.py) | `CanvasOAuth2Token` (Token-Speicher) |
-| [`src/app/canvas/canvas_api.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/canvas_api.py) | `init_canvas()` gibt einen `canvasapi.Canvas(org.lms_api_url, oauth_token)` zurück |
-| [`src/app/canvas/import_students.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/import_students.py) | Studierenden-Import (inkl. Opt-in-Filter) |
-| [`src/app/canvas/import_attribute.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/import_attribute.py) | Noten-Import → Attribut „über/unter Median“ |
-| [`src/app/canvas/opt_in_quiz.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/opt_in_quiz.py) | Opt-in-Quiz in Canvas anlegen |
-| [`src/app/canvas/export_team.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/export_team.py) | Team-Set als Canvas-Gruppen exportieren |
-| [`src/app/views/course.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/views/course.py) | REST-Endpunkte, die die Funktionen oben aufrufen |
+| [`src/canvas_oauth/canvas.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/canvas_oauth/canvas.py) | Builds the authorization URL (incl. scopes) and fetches tokens via `POST /login/oauth2/token` |
+| [`src/canvas_oauth/middleware.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/canvas_oauth/middleware.py) | Catches `MissingTokenError` and starts the OAuth flow |
+| [`src/canvas_oauth/models.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/canvas_oauth/models.py) | `CanvasOAuth2Token` (token storage) |
+| [`src/app/canvas/canvas_api.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/canvas_api.py) | `init_canvas()` returns a `canvasapi.Canvas(org.lms_api_url, oauth_token)` |
+| [`src/app/canvas/import_students.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/import_students.py) | Student import (incl. opt-in filter) |
+| [`src/app/canvas/import_attribute.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/import_attribute.py) | Grade import → attribute "above/below median" |
+| [`src/app/canvas/opt_in_quiz.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/opt_in_quiz.py) | Create the opt-in quiz in Canvas |
+| [`src/app/canvas/export_team.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/export_team.py) | Export a team set as Canvas groups |
+| [`src/app/views/course.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/views/course.py) | REST endpoints that call the functions above |
 | [`src/teamable/settings.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/teamable/settings.py) | `CANVAS_BASE_URL`, `CANVAS_OAUTH_*`, `LTI_ENABLED`, `SESSION_COOKIE_SAMESITE=None`, `SECURE_PROXY_SSL_HEADER` |
 
-Jede Funktion in `app/canvas/*` prüft zuerst `course.organization.lms_type == CANVAS` und **kehrt sonst ohne Aktion zurück**. Das ist die einzige Abstraktion, die es heute gibt. Ein LMS-Interface oder Adapter existiert noch nicht.
+Every function in `app/canvas/*` first checks `course.organization.lms_type == CANVAS` and **otherwise returns without doing anything**. This is the only abstraction that exists today. There is no LMS interface or adapter yet.
 
-### 3.2 Login (LTI 1.3) und Zugriffsschlüssel (OAuth2)
+### 3.2 Login (LTI 1.3) and access key (OAuth2)
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor L as Lehrende/r
+    actor L as Teacher
     participant C as Canvas
     participant B as Backend
     participant F as Frontend
 
-    L->>C: Klick auf Teamable im Kurs
-    C->>B: POST /lti/login/ (OIDC Initiation, target_link_uri)
-    B->>C: Redirect zur Canvas-OIDC-Auth
+    L->>C: Click on Teamable in the course
+    C->>B: POST /lti/login/ (OIDC initiation, target_link_uri)
+    B->>C: Redirect to Canvas OIDC auth
     C->>B: POST /lti/launch/ (id_token)
-    Note over B: Launch validieren, Rollen auswerten,<br/>MyUser / Course / CourseMember anlegen,<br/>Django-Session-Login, DRF-Token anlegen
+    Note over B: Validate launch, evaluate roles,<br/>create MyUser / Course / CourseMember,<br/>Django session login, create DRF token
     B->>B: Redirect /oauth/initiate?redirect_path=/course/{pk}
-    alt noch kein CanvasOAuth2Token
+    alt no CanvasOAuth2Token yet
         B->>C: Redirect /login/oauth2/auth?client_id&scopes&state&redirect_uri
-        L->>C: Zugriff erlauben
+        L->>C: Allow access
         C->>B: GET /oauth/oauth-callback?code&state
         B->>C: POST /login/oauth2/token (authorization_code)
         C-->>B: access_token, refresh_token, expires_in
-        Note over B: CanvasOAuth2Token speichern
-        B->>B: Redirect zurück zu /oauth/initiate?...
+        Note over B: Store CanvasOAuth2Token
+        B->>B: Redirect back to /oauth/initiate?...
     end
-    B->>F: Redirect {FRONTEND_BASE_URL}/authenticate?token={DRF-Token}&path=/course/{pk}
-    F->>F: Cookie "token" setzen, Redirect /course/{pk} → /course/{pk}/setup
+    B->>F: Redirect {FRONTEND_BASE_URL}/authenticate?token={DRF token}&path=/course/{pk}
+    F->>F: Set cookie "token", redirect /course/{pk} → /course/{pk}/setup
 ```
 
-**Details zum LTI-Launch** ([`src/lti/views.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/lti/views.py) `launch`)
+**LTI launch details** ([`src/lti/views.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/lti/views.py) `launch`)
 
-- Ausgewertete Claims:
-  - `https://purl.imsglobal.org/spec/lti/claim/roles` → Rolle
-  - `https://purl.imsglobal.org/spec/lti/claim/custom` → `canvas_course_id`, `canvas_user_id` (**Pflicht**: Die Werte müssen im Developer Key als Custom Fields konfiguriert sein, sonst bricht der Launch mit einer Exception ab)
-  - `given_name`, `family_name` → Name
-  - `https://purl.imsglobal.org/spec/lti/claim/context.label` → Kursname (nur beim ersten Anlegen)
-  - `iss` → Teil des Usernamens
-- Rollenabbildung: `Administrator`, `ContentDeveloper`, `Instructor` und `TeachingAssistant` werden zu `Instructor`. Alles andere wird zu `Student`.
-- Angelegt bzw. aktualisiert wird Folgendes:
-  - `MyUser` mit `username = "{canvas_user_id}+{iss}"` und unbrauchbarem Passwort
-  - `Course` per `get_or_create(lms_course_id=canvas_course_id)`. Die Organisation ist immer `Organization.objects.first()`.
-  - `CourseMember` per `get_or_create(user, course)` mit `lms_id = canvas_user_id`. Die Rolle wird bei jedem Launch neu gesetzt.
-- In `DEBUG` wird `validate_deployment` übersprungen.
-- Die LTI-Konfiguration (Issuer, Client-ID, Keys, Endpunkte) kommt entweder aus `LTI_CONF_JSON` + `LTI_CONF_JSON_PRIVATE_KEYS` (ENV) oder aus `LTI_CONF_FOLDER/LTI_CONF_FILE_NAME` (Datei, Default `src/lti/config/lti_config_settings.json`, steht in `.gitignore`). Ein Beispiel liegt nicht im Repo.
+- Evaluated claims:
+  - `https://purl.imsglobal.org/spec/lti/claim/roles` → role
+  - `https://purl.imsglobal.org/spec/lti/claim/custom` → `canvas_course_id`, `canvas_user_id` (**required**: the values must be configured as custom fields in the developer key, otherwise the launch aborts with an exception)
+  - `given_name`, `family_name` → name
+  - `https://purl.imsglobal.org/spec/lti/claim/context.label` → course name (only when first created)
+  - `iss` → part of the username
+- Role mapping: `Administrator`, `ContentDeveloper`, `Instructor` and `TeachingAssistant` become `Instructor`. Everything else becomes `Student`.
+- The following is created or updated:
+  - `MyUser` with `username = "{canvas_user_id}+{iss}"` and an unusable password
+  - `Course` via `get_or_create(lms_course_id=canvas_course_id)`. The organization is always `Organization.objects.first()`.
+  - `CourseMember` via `get_or_create(user, course)` with `lms_id = canvas_user_id`. The role is set again on every launch.
+- In `DEBUG`, `validate_deployment` is skipped.
+- The LTI configuration (issuer, client ID, keys, endpoints) comes either from `LTI_CONF_JSON` + `LTI_CONF_JSON_PRIVATE_KEYS` (ENV) or from `LTI_CONF_FOLDER/LTI_CONF_FILE_NAME` (file, default `src/lti/config/lti_config_settings.json`, listed in `.gitignore`). There is no example in the repo.
 
-**Details zu OAuth2** ([`src/canvas_oauth/`](https://github.com/Teamable-Analytics/teamable-backend/tree/183a36c/src/canvas_oauth))
+**OAuth2 details** ([`src/canvas_oauth/`](https://github.com/Teamable-Analytics/teamable-backend/tree/183a36c/src/canvas_oauth))
 
-- Endpunkte: `{CANVAS_OAUTH_CANVAS_DOMAIN}/login/oauth2/auth` und `/login/oauth2/token`. Die Domain kommt aus der ENV-Variablen `CANVAS_BASE_URL` und ist global, nicht pro Organisation.
-- Scopes: siehe `SCOPES_USED` (Abschnitt 1)
-- `state` und Redirect-URI liegen in der **Django-Session**. Deshalb gilt `SESSION_COOKIE_SAMESITE = None`, weil der Ablauf im Canvas-iframe bzw. cross-site läuft.
-- Token-Refresh: `get_oauth_token()` prüft vor jedem API-Aufruf `expires_within(CANVAS_OAUTH_TOKEN_EXPIRATION_BUFFER)` (Default 0) und holt bei Bedarf per `grant_type=refresh_token` ein neues Access Token.
-- Fehlt ein Token, wird `MissingTokenError` geworfen. Die `OAuthMiddleware` macht daraus einen Redirect zu Canvas. Das funktioniert nur bei Browser-Navigation. Bei `fetch`-Aufrufen aus dem Frontend schlägt der Redirect fehl, und die UI zeigt „Please relaunch Teamable from your Canvas dashboard“.
+- Endpoints: `{CANVAS_OAUTH_CANVAS_DOMAIN}/login/oauth2/auth` and `/login/oauth2/token`. The domain comes from the ENV variable `CANVAS_BASE_URL` and is global, not per organization.
+- Scopes: see `SCOPES_USED` (section 1)
+- `state` and the redirect URI are stored in the **Django session**. That is why `SESSION_COOKIE_SAMESITE = None` is set, because the flow runs in the Canvas iframe or cross-site.
+- Token refresh: before every API call, `get_oauth_token()` checks `expires_within(CANVAS_OAUTH_TOKEN_EXPIRATION_BUFFER)` (default 0) and, if needed, fetches a new access token via `grant_type=refresh_token`.
+- If there is no token, `MissingTokenError` is raised. The `OAuthMiddleware` turns it into a redirect to Canvas. This only works for browser navigation. For `fetch` calls from the frontend the redirect fails, and the UI shows "Please relaunch Teamable from your Canvas dashboard".
 
-### 3.3 Datenabruf und Zurückschreiben
+### 3.3 Fetching data and writing back
 
-Alle Aufrufe laufen über `init_canvas(request, organization)`, also mit dem **OAuth-Token des aktuell eingeloggten Users** gegen `organization.lms_api_url`.
+All calls go through `init_canvas(request, organization)`, i.e. with the **OAuth token of the currently logged-in user** against `organization.lms_api_url`.
 
-| Aktion (Backend-Funktion) | Auslöser | Canvas-Aufrufe (via `canvasapi`) | Ergebnis in Teamable |
+| Action (backend function) | Trigger | Canvas calls (via `canvasapi`) | Result in Teamable |
 |---|---|---|---|
-| `import_students_from_canvas` | Button „Import students“ | `get_course`, `get_enrollments(type=["StudentEnrollment"])`; falls `lms_opt_in_quiz_id` gesetzt ist: `get_quiz`, `quiz.get_questions()`, `quiz.get_submissions()`, `submission.get_submission_questions()` | `CourseMember` (Role `Student`) per `upsert_course_member` (Schlüssel: `lms_id`). Felder: `first_name`/`last_name` aus `user.sortable_name` („Nachname, Vorname“), `lms_id = user.id`, `sis_user_id` |
-| `import_gradebook_attribute_from_canvas` | Button „Import gradebook data“ | `get_course`, `get_assignments()`, je Assignment `get_submissions()` | Pro Assignment ein `Attribute` (`manage_type=Grade`) mit 2 Optionen + `AttributeResponse` pro Studierendem (siehe Abschnitt 7) |
-| `create_opt_in_quiz_canvas` | Kachel „Generate opt-in quiz“ | `create_quiz({title:"Opt-in", quiz_type:"survey"})`, `quiz.create_question(...)` mit Antworten „Yes“ (weight 100) und „No“ (weight 0) | `Course.lms_opt_in_quiz_id = quiz.id` |
-| `export_team_to_canvas` | Button „Export to Canvas“ | `create_group_category(name)` (bei `BadRequest` wird ein Suffix „(2)“, „(3)“ … angehängt, max. 20 Versuche), je Team `create_group(name)`, je Mitglied `group.create_membership(lms_id)` | Nur in Canvas. In Teamable wird nichts gespeichert, auch keine Canvas-Gruppen-IDs. |
+| `import_students_from_canvas` | Button "Import students" | `get_course`, `get_enrollments(type=["StudentEnrollment"])`; if `lms_opt_in_quiz_id` is set: `get_quiz`, `quiz.get_questions()`, `quiz.get_submissions()`, `submission.get_submission_questions()` | `CourseMember` (role `Student`) via `upsert_course_member` (key: `lms_id`). Fields: `first_name`/`last_name` from `user.sortable_name` ("Last name, First name"), `lms_id = user.id`, `sis_user_id` |
+| `import_gradebook_attribute_from_canvas` | Button "Import gradebook data" | `get_course`, `get_assignments()`, `get_submissions()` per assignment | One `Attribute` (`manage_type=Grade`) per assignment with 2 options + one `AttributeResponse` per student (see section 7) |
+| `create_opt_in_quiz_canvas` | Tile "Generate opt-in quiz" | `create_quiz({title:"Opt-in", quiz_type:"survey"})`, `quiz.create_question(...)` with the answers "Yes" (weight 100) and "No" (weight 0) | `Course.lms_opt_in_quiz_id = quiz.id` |
+| `export_team_to_canvas` | Button "Export to Canvas" | `create_group_category(name)` (on `BadRequest` a suffix "(2)", "(3)" … is appended, max. 20 attempts), `create_group(name)` per team, `group.create_membership(lms_id)` per member | Only in Canvas. Nothing is stored in Teamable, not even the Canvas group IDs. |
 
-**Wann wird geholt?** Nur auf Knopfdruck. Es gibt keinen automatischen Abgleich. Ein erneuter Import aktualisiert vorhandene Datensätze per Upsert, löscht aber keine Studierenden, die inzwischen aus dem Kurs entfernt wurden.
+**When is data fetched?** Only when a button is pressed. There is no automatic sync. A new import updates existing records via upsert, but does not delete students who have since been removed from the course.
 
-**Was wird zurückgeschrieben?** Nur zwei Dinge: das **Opt-in-Quiz** und die **Gruppen** (Group Category + Groups + Memberships). Noten oder andere Daten werden nie zurückgeschrieben.
+**What is written back?** Only two things: the **opt-in quiz** and the **groups** (group category + groups + memberships). Grades or other data are never written back.
 
-**Opt-in-Logik:** Die Frage hat genau eine „richtige“ Antwort („Yes“, weight 100). Eine Submission zählt als Zustimmung, wenn `submission_question.correct` gesetzt ist oder, als Fallback, die gewählte `answer` der Antwort-ID von „Yes“ entspricht. Der Code nimmt genau eine Frage und eine Submission pro User an.
+**Opt-in logic:** The question has exactly one "correct" answer ("Yes", weight 100). A submission counts as consent if `submission_question.correct` is set or, as a fallback, the selected `answer` matches the answer ID of "Yes". The code assumes exactly one question and one submission per user.
 
 ---
 
-## 4. Datenmodell mit LMS-Bezug
+## 4. Data model with LMS relation
 
 ```mermaid
 erDiagram
-    Organization ||--o{ Course : hat
+    Organization ||--o{ Course : has
     Course ||--o{ CourseMember : course_members
     MyUser |o--o{ CourseMember : course_memberships
     MyUser ||--o| CanvasOAuth2Token : canvas_oauth2_token
@@ -200,162 +200,162 @@ erDiagram
     Team }o--o{ CourseMember : members
 ```
 
-| Modell.Feld | Bedeutung | Herkunft des Werts |
+| Model.field | Meaning | Source of the value |
 |---|---|---|
-| `Organization.lms_type` | LMS-Typ, derzeit nur `"CANVAS"` | manuell im Django-Admin |
-| `Organization.lms_api_url` | Basis-URL des LMS (ohne `/` am Ende). Wird für API-Aufrufe und Deep Links verwendet | manuell im Admin |
-| `Course.lms_course_id` | Canvas-Kurs-ID | LTI-Launch (`custom.canvas_course_id`) oder manuell im Admin |
-| `Course.lms_opt_in_quiz_id` | ID des Opt-in-Quiz in Canvas | gesetzt von `create_opt_in_quiz_canvas` (oder manuell) |
-| `Course.lms_access_token` | **Legacy**: früher ein manuell eingetragenes Canvas-Token. Wird vom Code **nicht mehr gelesen**. Er ist nur noch über `CourseUpdateSerializer` (PUT/PATCH `/api/v1/courses/{id}/`) beschreibbar. | Admin/API |
-| `Course.name` | Kursname | LTI `context.label` beim ersten Launch, sonst Admin |
-| `CourseMember.lms_id` | Canvas-User-ID. Wird für den Import (Upsert-Schlüssel), Noten-Zuordnung (`submission.user_id`), Gruppen-Export und `lms_link` verwendet. Unique pro Kurs. | Import (`enrollment.user.id`) oder LTI (`custom.canvas_user_id`) |
-| `CourseMember.sis_user_id` | Matrikelnummer bzw. SIS-ID. Anzeige, Suche und Sortierung in der Studierendenliste. Unique pro Kurs. | Import (`enrollment.sis_user_id`, falls vorhanden) |
-| `CourseMember.first_name` / `last_name` | Name | Import (`sortable_name`) oder LTI (`given_name`/`family_name`) |
-| `CourseMember.role` | `Student` / `Instructor` | Import → immer `Student`. LTI → aus den Rollen-Claims. |
-| `CourseMember.user` | Verknüpfung zum Login-Account. Ist bei importierten Studierenden `NULL`. | LTI-Launch oder E-Mail-Sign-up per JWT |
-| `CourseMember.lms_link` *(Property)* | `{lms_api_url}/courses/{lms_course_id}/users/{lms_id}` | berechnet |
-| `Course.opt_in_quiz_link` *(Property)* | `{lms_api_url}/courses/{lms_course_id}/quizzes/{lms_opt_in_quiz_id}` | berechnet |
-| `MyUser.username` | `"{canvas_user_id}+{iss}"` bei LTI-Usern, E-Mail bei Sign-up-Usern | LTI / Sign-up |
-| `CanvasOAuth2Token.access_token` / `refresh_token` / `expires` | OAuth-Zugang zu Canvas, **pro User** (OneToOne), nicht pro Kurs | OAuth-Callback / Refresh |
-| `Attribute` (`manage_type="Grade"`) | Ein Attribut pro Canvas-Assignment, Name `"{assignment.name} - {assignment.id}"` | Noten-Import |
-| `AttributeOption` (`"Above Average"`/`"Below Average"`, Werte `Above`/`Below`) | Notenkategorie | Noten-Import |
-| `AttributeResponse` | Zuordnung Studierende/r → Kategorie | Noten-Import |
+| `Organization.lms_type` | LMS type, currently only `"CANVAS"` | set manually in the Django admin |
+| `Organization.lms_api_url` | Base URL of the LMS (without trailing `/`). Used for API calls and deep links | set manually in the admin |
+| `Course.lms_course_id` | Canvas course ID | LTI launch (`custom.canvas_course_id`) or manually in the admin |
+| `Course.lms_opt_in_quiz_id` | ID of the opt-in quiz in Canvas | set by `create_opt_in_quiz_canvas` (or manually) |
+| `Course.lms_access_token` | **Legacy**: formerly a manually entered Canvas token. **No longer read** by the code. It can only still be written via `CourseUpdateSerializer` (PUT/PATCH `/api/v1/courses/{id}/`). | Admin/API |
+| `Course.name` | Course name | LTI `context.label` on the first launch, otherwise admin |
+| `CourseMember.lms_id` | Canvas user ID. Used for the import (upsert key), grade mapping (`submission.user_id`), group export and `lms_link`. Unique per course. | Import (`enrollment.user.id`) or LTI (`custom.canvas_user_id`) |
+| `CourseMember.sis_user_id` | Student ID number or SIS ID. Displayed, searched and sorted in the student list. Unique per course. | Import (`enrollment.sis_user_id`, if available) |
+| `CourseMember.first_name` / `last_name` | Name | Import (`sortable_name`) or LTI (`given_name`/`family_name`) |
+| `CourseMember.role` | `Student` / `Instructor` | Import → always `Student`. LTI → from the role claims. |
+| `CourseMember.user` | Link to the login account. `NULL` for imported students. | LTI launch or email sign-up via JWT |
+| `CourseMember.lms_link` *(property)* | `{lms_api_url}/courses/{lms_course_id}/users/{lms_id}` | computed |
+| `Course.opt_in_quiz_link` *(property)* | `{lms_api_url}/courses/{lms_course_id}/quizzes/{lms_opt_in_quiz_id}` | computed |
+| `MyUser.username` | `"{canvas_user_id}+{iss}"` for LTI users, email for sign-up users | LTI / sign-up |
+| `CanvasOAuth2Token.access_token` / `refresh_token` / `expires` | OAuth access to Canvas, **per user** (OneToOne), not per course | OAuth callback / refresh |
+| `Attribute` (`manage_type="Grade"`) | One attribute per Canvas assignment, name `"{assignment.name} - {assignment.id}"` | Grade import |
+| `AttributeOption` (`"Above Average"`/`"Below Average"`, values `Above`/`Below`) | Grade category | Grade import |
+| `AttributeResponse` | Assignment of a student → category | Grade import |
 
-Ohne LMS-Bezug, aber relevant: `Section` (wird **nicht** aus Canvas importiert, nur Admin bzw. `makefakeclass`), `Relationship`, `TeamSet`/`Team`, `TeamTemplate*`/`AttributeTemplate` (derzeit ungenutzt).
+Not related to the LMS, but relevant: `Section` (**not** imported from Canvas, only via admin or `makefakeclass`), `Relationship`, `TeamSet`/`Team`, `TeamTemplate*`/`AttributeTemplate` (currently unused).
 
 ---
 
-## 5. Ablauf aus Sicht der Lehrenden
+## 5. Flow from the teacher's perspective
 
-Alle Kurs-Endpunkte liegen in [`src/app/views/course.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/views/course.py) (`CourseViewSet`, Router-Präfix `/api/v1/courses/`). Das Frontend sendet `Authorization: Token <token>` aus dem Cookie.
+All course endpoints are in [`src/app/views/course.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/views/course.py) (`CourseViewSet`, router prefix `/api/v1/courses/`). The frontend sends `Authorization: Token <token>` from the cookie.
 
-| # | Schritt in der Oberfläche | Frontend (Seite / Hook) | Backend-Endpunkt | LMS-Kontakt |
+| # | Step in the UI | Frontend (page / hook) | Backend endpoint | LMS contact |
 |---|---|---|---|---|
-| 0 | Teamable in Canvas starten | – | `POST /lti/login/`, `POST /lti/launch/`, `GET /oauth/initiate`, `GET /oauth/oauth-callback` | ja (LTI + OAuth) |
-| 0a | Token übernehmen | `/authenticate` (`frontend: src/app/(accounts)/authenticate/route.ts`) | – | nein |
-| 0b | Start: User und Kurs laden | `/` → `/course/{id}/setup`; `use-auth-user-query.ts`, `useCourse.tsx` | `GET /api/v1/accounts/users/me/`, `GET /api/v1/courses/{id}/` | nein |
-| 1 | Onboarding-Fortschritt anzeigen | Seite *Onboarding* (`setup/page.tsx`, `useSetupSteps.tsx`) | `GET /api/v1/courses/{id}/get_onboarding_progress/` | nein (liefert `opt_in_quiz_link`, `has_*`-Flags) |
-| 2 | *(optional)* „Generate opt-in quiz“ / „View opt-in quiz“ | `GenerateOptInQuiz.tsx`, `use-create-opt-in-quiz.ts` | `POST /api/v1/courses/{id}/create_opt_in_quiz_lms/` | **schreibt** Quiz |
-| 3 | „Import students“ (Onboarding oder Seite *Students*) | `use-import-students-from-lms.ts` | `POST /api/v1/courses/{id}/import_students_from_lms/` | **liest** Enrollments (+ Quiz-Antworten) |
-| 4 | Studierendenliste ansehen, suchen, filtern | Seite *Students* (`useStudents.tsx`) | `GET /api/v1/courses/{id}/students/?page&search&sort&sections`, `GET /api/v1/course/{id}/sections/` | nein (Link „im LMS öffnen“ über `lms_link`) |
-| 5 | „Define student profile“ | – (Schritt ist deaktiviert) | – | – |
-| 6 | „Import gradebook data“ (Onboarding oder *Students*) | `use-import-student-gradebook-data.ts` | `POST /api/v1/courses/{id}/import_gradebook_attribute_from_lms/` | **liest** Assignments + Submissions |
-| 7 | „(Optional) Project setup“ | – (deaktiviert) | – | – |
-| 8 | „Generate teams“: Dialog zur Auswahl der Notenquelle | `GenerateTeamsAttributeSelector.tsx`, `use-grade-attributes.ts` | `GET /api/v1/courses/{id}/grade-attributes/` | nein |
-| 9 | Teams erzeugen | `use-generate-teams.tsx` | `POST /api/v1/courses/{id}/generate_teams/` Body `{attribute}` → `{team_set_id}` | nein |
-| 10 | Team-Sets und Teams ansehen | Seiten *Team sets* und *Team set* (`use-list-team-sets.ts`, `use-team-set.ts`) | `GET /api/v1/courses/{id}/get_team_sets/`, `GET /api/v1/courses/{id}/team-sets/{teamSetId}/` | nein |
-| 11 | „Export to Canvas“ | Seite *Team set* (`use-export-team-set-lms.ts`) | `POST /api/v1/courses/{id}/export_team_to_lms/` Body `{team_set}` | **schreibt** Gruppen |
+| 0 | Launch Teamable in Canvas | – | `POST /lti/login/`, `POST /lti/launch/`, `GET /oauth/initiate`, `GET /oauth/oauth-callback` | yes (LTI + OAuth) |
+| 0a | Take over the token | `/authenticate` (`frontend: src/app/(accounts)/authenticate/route.ts`) | – | no |
+| 0b | Start: load user and course | `/` → `/course/{id}/setup`; `use-auth-user-query.ts`, `useCourse.tsx` | `GET /api/v1/accounts/users/me/`, `GET /api/v1/courses/{id}/` | no |
+| 1 | Show onboarding progress | Page *Onboarding* (`setup/page.tsx`, `useSetupSteps.tsx`) | `GET /api/v1/courses/{id}/get_onboarding_progress/` | no (returns `opt_in_quiz_link`, `has_*` flags) |
+| 2 | *(optional)* "Generate opt-in quiz" / "View opt-in quiz" | `GenerateOptInQuiz.tsx`, `use-create-opt-in-quiz.ts` | `POST /api/v1/courses/{id}/create_opt_in_quiz_lms/` | **writes** quiz |
+| 3 | "Import students" (onboarding or page *Students*) | `use-import-students-from-lms.ts` | `POST /api/v1/courses/{id}/import_students_from_lms/` | **reads** enrollments (+ quiz responses) |
+| 4 | View, search, filter the student list | Page *Students* (`useStudents.tsx`) | `GET /api/v1/courses/{id}/students/?page&search&sort&sections`, `GET /api/v1/course/{id}/sections/` | no (link "open in LMS" via `lms_link`) |
+| 5 | "Define student profile" | – (step is disabled) | – | – |
+| 6 | "Import gradebook data" (onboarding or *Students*) | `use-import-student-gradebook-data.ts` | `POST /api/v1/courses/{id}/import_gradebook_attribute_from_lms/` | **reads** assignments + submissions |
+| 7 | "(Optional) Project setup" | – (disabled) | – | – |
+| 8 | "Generate teams": dialog for choosing the grade source | `GenerateTeamsAttributeSelector.tsx`, `use-grade-attributes.ts` | `GET /api/v1/courses/{id}/grade-attributes/` | no |
+| 9 | Generate teams | `use-generate-teams.tsx` | `POST /api/v1/courses/{id}/generate_teams/` body `{attribute}` → `{team_set_id}` | no |
+| 10 | View team sets and teams | Pages *Team sets* and *Team set* (`use-list-team-sets.ts`, `use-team-set.ts`) | `GET /api/v1/courses/{id}/get_team_sets/`, `GET /api/v1/courses/{id}/team-sets/{teamSetId}/` | no |
+| 11 | "Export to Canvas" | Page *Team set* (`use-export-team-set-lms.ts`) | `POST /api/v1/courses/{id}/export_team_to_lms/` body `{team_set}` | **writes** groups |
 
-Die Onboarding-Schritte werden aus `get_onboarding_progress` abgeleitet: `has_students` → `has_attribute_responses` → `has_team_set`.
+The onboarding steps are derived from `get_onboarding_progress`: `has_students` → `has_attribute_responses` → `has_team_set`.
 
-Weitere Endpunkte, die nicht aus dem Kursablauf aufgerufen werden: `PUT/PATCH /api/v1/courses/{id}/` (Kursdaten inkl. `lms_access_token`). Die Viewsets für Attribute, Teams, Sections und Relationships existieren zwar, sind aber **nicht geroutet**. Die Seite *Project sets* ruft `/api/v1/teamset-templates` auf, dieser Endpunkt existiert nicht.
+Other endpoints that are not called from the course flow: `PUT/PATCH /api/v1/courses/{id}/` (course data incl. `lms_access_token`). The viewsets for attributes, teams, sections and relationships exist, but are **not routed**. The page *Project sets* calls `/api/v1/teamset-templates`, but this endpoint does not exist.
 
 ---
 
-## 6. Anmeldung, Rechte und Token-Speicherung
+## 6. Login, permissions and token storage
 
-### 6.1 Lehrende: zwei Wege
+### 6.1 Teachers: two ways
 
-**A) Über LTI (Produktivweg)**, siehe Abschnitt 3.2. Ergebnis: Django-Session, DRF-Token, Canvas-OAuth-Token. Nur auf diesem Weg entsteht ein Canvas-OAuth-Token, und nur dann funktionieren die LMS-Buttons.
+**A) Via LTI (production)**, see section 3.2. Result: Django session, DRF token, Canvas OAuth token. Only this way creates a Canvas OAuth token, and only then do the LMS buttons work.
 
-**B) Über E-Mail und Passwort (Dev/Fallback)**
-1. Im Admin wird ein `CourseMember` (Role `Instructor`, `user` leer) angelegt.
-2. Die Admin-Aktion „Create JWT token for selected course members“ erzeugt ein JWT `{course_member_id}`, signiert mit `SECRET_KEY` (HS256, ohne Ablaufdatum).
-3. Im Frontend `/accounts/signup?token=…` aufrufen → `POST /api/v1/accounts/sign-up/` `{email, password, token}`. Das Backend legt `MyUser` an und verknüpft ihn mit dem CourseMember. Das JWT ist nur einmal nutzbar, solange `user` leer ist.
-4. `POST /api/v1/accounts/log-in/` `{email, password}` → `{token}` (DRF-Token) → Cookie.
+**B) Via email and password (dev/fallback)**
+1. A `CourseMember` (role `Instructor`, `user` empty) is created in the admin.
+2. The admin action "Create JWT token for selected course members" creates a JWT `{course_member_id}`, signed with `SECRET_KEY` (HS256, without expiry).
+3. Open `/accounts/signup?token=…` in the frontend → `POST /api/v1/accounts/sign-up/` `{email, password, token}`. The backend creates a `MyUser` and links it to the CourseMember. The JWT can only be used once, as long as `user` is empty.
+4. `POST /api/v1/accounts/log-in/` `{email, password}` → `{token}` (DRF token) → cookie.
 
-Solche User haben **keinen** `CanvasOAuth2Token`. Sobald die Organisation vom Typ `CANVAS` ist, scheitern alle LMS-Aktionen.
+Such users have **no** `CanvasOAuth2Token`. As soon as the organization is of type `CANVAS`, all LMS actions fail.
 
-### 6.2 Studierende
+### 6.2 Students
 
-- Studierende **melden sich nicht an**. Sie existieren nur als Daten (`CourseMember` mit `user = NULL`), angelegt durch den Import.
-- Ihre einzige Interaktion mit dem LMS ist das Ausfüllen des Opt-in-Quiz in Canvas.
-- Ein LTI-Launch durch Studierende ist technisch möglich (Role `Student`). Sie würden dann aber ebenfalls in den OAuth-Flow geleitet und bekämen danach bei jedem Kurs-Endpunkt `403`.
+- Students **do not log in**. They only exist as data (`CourseMember` with `user = NULL`), created by the import.
+- Their only interaction with the LMS is filling in the opt-in quiz in Canvas.
+- An LTI launch by students is technically possible (role `Student`). They would then also be sent into the OAuth flow and afterwards get `403` on every course endpoint.
 
-### 6.3 Rechte
+### 6.3 Permissions
 
-- [`src/app/permissions.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/permissions.py) `IsCourseInstructor`: `has_permission` gibt immer `True` zurück. Die eigentliche Prüfung erfolgt auf Objektebene über `Course.has_edit_permission`. Erlaubt sind Superuser, `is_staff` und User mit `CourseMember(role=Instructor)` im Kurs.
-- Weil die Kurs-Endpunkte `get_object()` aufrufen, ist jeder Kurs-Endpunkt so geschützt.
-- Auf Canvas-Seite gelten zusätzlich die Rechte der Lehrperson (OAuth läuft im Namen des Users) und die angefragten Scopes.
-- Authentifizierung in DRF: `BasicAuthentication` + `TokenAuthentication` (die Session wird für die API nicht genutzt).
+- [`src/app/permissions.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/permissions.py) `IsCourseInstructor`: `has_permission` always returns `True`. The actual check happens at object level via `Course.has_edit_permission`. Allowed are superusers, `is_staff` and users with `CourseMember(role=Instructor)` in the course.
+- Because the course endpoints call `get_object()`, every course endpoint is protected this way.
+- On the Canvas side, the teacher's permissions (OAuth runs on behalf of the user) and the requested scopes also apply.
+- Authentication in DRF: `BasicAuthentication` + `TokenAuthentication` (the session is not used for the API).
 
-### 6.4 Wo liegen welche Tokens?
+### 6.4 Where are which tokens stored?
 
-| Token | Erzeugt durch | Gespeichert in | Verwendet für |
+| Token | Created by | Stored in | Used for |
 |---|---|---|---|
-| LTI `id_token` (JWT von Canvas) | Canvas beim Launch | nicht persistiert (PyLTI1p3 nutzt Session/Cache für `state`/`nonce`) | Identität beim Launch |
-| Django-Session-Cookie | `auth_login` im LTI-Launch | Browser-Cookie + DB-Tabelle `django_session` | nur für den OAuth-Flow (`state`, Redirect-URIs, `request.user`) |
-| **Canvas OAuth Access/Refresh Token** | `/oauth/oauth-callback` | DB-Tabelle `canvas_oauth_canvasoauth2token` (**Klartext**, 1 pro User) | alle Canvas-REST-Aufrufe (Bearer) |
-| **DRF-Token** (Teamable-API) | LTI-Launch / `initiate` / Log-in | DB-Tabelle `authtoken_token`. Wird per **URL-Query** an das Frontend übergeben und dort im Cookie `token` gespeichert (nicht HttpOnly, Pfad `/`) | Header `Authorization: Token …` bei allen API-Aufrufen |
-| Sign-up-JWT | Admin-Aktion | nirgends (zustandslos) | einmalige Verknüpfung CourseMember ↔ neuer User |
-| `Course.lms_access_token` | manuell | DB | **ungenutzt** (Legacy) |
-| LTI-Private-Key / Tool-Config | Betreiber | ENV (`LTI_CONF_JSON*`) oder Datei `src/lti/config/` | Signatur und Validierung bei LTI |
-| `CANVAS_OAUTH_CLIENT_ID/SECRET` | Canvas Developer Key (API Key) | ENV / `.env` | OAuth-Token-Requests |
+| LTI `id_token` (JWT from Canvas) | Canvas on launch | not persisted (PyLTI1p3 uses session/cache for `state`/`nonce`) | Identity on launch |
+| Django session cookie | `auth_login` in the LTI launch | Browser cookie + DB table `django_session` | only for the OAuth flow (`state`, redirect URIs, `request.user`) |
+| **Canvas OAuth access/refresh token** | `/oauth/oauth-callback` | DB table `canvas_oauth_canvasoauth2token` (**plain text**, 1 per user) | all Canvas REST calls (bearer) |
+| **DRF token** (Teamable API) | LTI launch / `initiate` / log-in | DB table `authtoken_token`. Passed to the frontend via **URL query** and stored there in the cookie `token` (not HttpOnly, path `/`) | Header `Authorization: Token …` on all API calls |
+| Sign-up JWT | Admin action | nowhere (stateless) | one-time link CourseMember ↔ new user |
+| `Course.lms_access_token` | manually | DB | **unused** (legacy) |
+| LTI private key / tool config | Operator | ENV (`LTI_CONF_JSON*`) or file `src/lti/config/` | Signing and validation for LTI |
+| `CANVAS_OAUTH_CLIENT_ID/SECRET` | Canvas developer key (API key) | ENV / `.env` | OAuth token requests |
 
 ---
 
-## 7. Daten für die Team-Bildung
+## 7. Data for team formation
 
-Heute fließen genau **zwei Arten von LMS-Daten** ein:
+Today exactly **two kinds of LMS data** are used:
 
-1. **Teilnehmende**: Studierende aus den Enrollments, optional gefiltert durch das Opt-in-Quiz
-2. **Noten**: pro Assignment aus den Submissions
+1. **Participants**: students from the enrollments, optionally filtered by the opt-in quiz
+2. **Grades**: per assignment from the submissions
 
-Sections, Beziehungen, Projekte und Profil-Fragen spielen beim aktuellen Algorithmus keine Rolle.
+Sections, relationships, projects and profile questions play no role in the current algorithm.
 
-### 7.1 Noten-Import ([`import_attribute.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/import_attribute.py))
+### 7.1 Grade import ([`import_attribute.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/canvas/import_attribute.py))
 
-Für **jedes** Assignment mit `grading_type` ∈ {`points`, `percent`} gilt:
+For **every** assignment with `grading_type` ∈ {`points`, `percent`}:
 
-1. Alle Submissions laden. Nur Submissions von bereits importierten Studierenden (`lms_id == submission.user_id`) werden berücksichtigt.
-2. Score = `submission.score`. Fehlende Scores (`None`) zählen als **0**.
-3. Nach Score aufsteigend sortieren. `median_index = (n + 1) // 2`.
-4. Attribut `"{assignment.name} - {assignment.id}"` (`manage_type=Grade`) mit Optionen *Above Average* / *Below Average* anlegen oder wiederverwenden.
-5. Die obere Hälfte (Index ≥ `median_index`) erhält *Above*, der Rest *Below*. Das wird per Upsert als `AttributeResponse` gespeichert.
+1. Load all submissions. Only submissions from students who have already been imported (`lms_id == submission.user_id`) are considered.
+2. Score = `submission.score`. Missing scores (`None`) count as **0**.
+3. Sort by score in ascending order. `median_index = (n + 1) // 2`.
+4. Create or reuse the attribute `"{assignment.name} - {assignment.id}"` (`manage_type=Grade`) with the options *Above Average* / *Below Average*.
+5. The upper half (index ≥ `median_index`) gets *Above*, the rest *Below*. This is stored via upsert as `AttributeResponse`.
 
-Gespeichert wird also **keine Rohnote**, sondern nur die binäre Kategorie über oder unter dem Median.
+So **no raw grade** is stored, only the binary category above or below the median.
 
-### 7.2 Team-Generierung ([`src/app/services/team_generation.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/services/team_generation.py))
+### 7.2 Team generation ([`src/app/services/team_generation.py`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/services/team_generation.py))
 
-- Eingabe: ein Grade-Attribut (im Dialog „Select a grade source“ ausgewählt).
-- Liste = alle *Above*-Studierenden, danach alle *Below*-Studierenden (innerhalb der Gruppen nicht nach Score sortiert).
-- Paare werden aus dem ersten und letzten Eintrag der Liste gebildet, also jeweils eine *Above*- mit einer *Below*-Person. Bei ungerader Anzahl entsteht am Ende ein 3er-Team.
-- Ergebnis: `TeamSet` „Study Buddy - n“ mit Teams „Team 1…k“.
-- Ein Aufruf der externen Teamable-Algorithmus-API (`api.teamableanalytics.ok.ubc.ca`) ist im Code **auskommentiert**. Die ENV-Variablen `TEAM_GENERATION_API_URL/KEY` werden nicht gelesen.
+- Input: one grade attribute (chosen in the dialog "Select a grade source").
+- List = all *Above* students, followed by all *Below* students (not sorted by score within the groups).
+- Pairs are formed from the first and last entry of the list, so each pair has one *Above* and one *Below* person. With an odd number, a team of 3 is formed at the end.
+- Result: `TeamSet` "Study Buddy - n" with teams "Team 1…k".
+- A call to the external Teamable algorithm API (`api.teamableanalytics.ok.ubc.ca`) is **commented out** in the code. The ENV variables `TEAM_GENERATION_API_URL/KEY` are not read.
 
-### 7.3 Rückfluss ins LMS
+### 7.3 Writing back to the LMS
 
-Teams werden per Export als **Canvas Group Category** (Name = Team-Set-Name) mit einer **Group pro Team** angelegt. Die Mitglieder werden über `lms_id` zugeordnet. Mitglieder ohne `lms_id` werden übersprungen.
+On export, teams are created as a **Canvas group category** (name = team set name) with **one group per team**. Members are assigned via `lms_id`. Members without `lms_id` are skipped.
 
 ---
 
-## 8. Lokales Setup (mit und ohne Canvas)
+## 8. Local setup (with and without Canvas)
 
-### 8.1 Ohne Canvas (empfohlen zum Testen der Oberfläche)
+### 8.1 Without Canvas (recommended for testing the UI)
 
-Trick: Wenn die Organisation **nicht** `lms_type=CANVAS` hat, kehren alle LMS-Funktionen sofort mit `200 OK` zurück, ohne Canvas oder OAuth zu kontaktieren.
+Trick: If the organization does **not** have `lms_type=CANVAS`, all LMS functions return `200 OK` immediately without contacting Canvas or OAuth.
 
 **Backend** (Python 3.11):
 ```bash
 cd teamable-backend
 python -m venv venv && source venv/bin/activate      # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-cp sample.env .env           # DEBUG=TRUE → SQLite, CORS offen
+cp sample.env .env           # DEBUG=TRUE → SQLite, CORS open
 cd src
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver   # http://localhost:8000
 ```
 
-**Daten im Admin** (`http://localhost:8000/admin`):
-1. `Organization` anlegen: Name beliebig, **LMS Type leer lassen**.
-2. `Course` anlegen: Organisation wählen, LMS-Felder leer lassen.
-3. Studierende erzeugen: `python manage.py makefakeclass <course_id> <anzahl_studierende> <anzahl_sections>`. Der Kurs muss vorher existieren, sonst schlägt der Befehl fehl, weil `organization` Pflicht ist.
-4. Für die Team-Bildung ein Noten-Attribut **manuell** anlegen, weil der Import ohne Canvas nichts tut:
-   - `Attribute`: `course`, `name` beliebig, `manage_type = Grade`, `value_type = String`, `max_selections = 1`
-   - 2× `AttributeOption`: `label = "Above Average"` / `"Below Average"` (die Labels müssen exakt so lauten)
-   - `AttributeResponse` je Studierendem → eine der beiden Optionen
-5. Instructor-Account: `CourseMember` (Role `Instructor`, User leer) anlegen → in der Liste auswählen → Aktion „Create JWT token…“ → Token kopieren.
+**Data in the admin** (`http://localhost:8000/admin`):
+1. Create an `Organization`: any name, **leave LMS type empty**.
+2. Create a `Course`: choose the organization, leave the LMS fields empty.
+3. Generate students: `python manage.py makefakeclass <course_id> <number_of_students> <number_of_sections>`. The course must exist beforehand, otherwise the command fails because `organization` is required.
+4. Create a grade attribute for team formation **manually**, because the import does nothing without Canvas:
+   - `Attribute`: `course`, any `name`, `manage_type = Grade`, `value_type = String`, `max_selections = 1`
+   - 2× `AttributeOption`: `label = "Above Average"` / `"Below Average"` (the labels must be exactly like this)
+   - One `AttributeResponse` per student → one of the two options
+5. Instructor account: create a `CourseMember` (role `Instructor`, user empty) → select it in the list → action "Create JWT token…" → copy the token.
 
 **Frontend** (Node 20.16):
 ```bash
@@ -363,34 +363,34 @@ cd teamable-frontend
 cp sample.env .env           # BACKEND_BASE_URI=http://localhost:8000
 nvm use && yarn && yarn dev  # http://localhost:3000
 ```
-Danach `http://localhost:3000/accounts/signup?token=<JWT>` aufrufen, registrieren und das Onboarding nutzen. „Generate teams“ funktioniert mit dem manuell angelegten Attribut.
+Then open `http://localhost:3000/accounts/signup?token=<JWT>`, register and use the onboarding. "Generate teams" works with the manually created attribute.
 
-### 8.2 Mit Canvas
+### 8.2 With Canvas
 
-- `sample.env` enthält `CANVAS_BASE_URL`, `CANVAS_OAUTH_CLIENT_ID`, `CANVAS_OAUTH_CLIENT_SECRET`, `FRONTEND_BASE_URL` sowie `LTI_CONF_FOLDER`/`LTI_CONF_FILE_NAME`.
-- In Canvas werden zwei **Developer Keys** benötigt:
-  1. **LTI Key** (LTI 1.3) mit Redirect/Target `…/lti/launch/`, OIDC-Login `…/lti/login/` und den Custom Fields `canvas_course_id=$Canvas.course.id` und `canvas_user_id=$Canvas.user.id`
-  2. **API Key** (OAuth2) mit Redirect-URI `…/oauth/oauth-callback` und aktivierten Scopes laut `SCOPES_USED`
-- Die passende `lti_config_settings.json` (PyLTI1p3-Format, inkl. Private Key) unter `src/lti/config/` ablegen.
-- In der Organisation `LMS Type = CANVAS` und `LMS API URL = CANVAS_BASE_URL` setzen.
-- Eine lokale Canvas-Instanz per Docker ist in [`docs/local_canvas.md`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/docs/local_canvas.md) beschrieben. Die Anleitung stammt aus einem anderen Projekt und muss angepasst werden.
-- Der README-Schritt „LMS Access Token in den Course eintragen“ ist **veraltet**. Dieses Feld wird nicht mehr genutzt, der Zugriff läuft ausschließlich über OAuth.
+- `sample.env` contains `CANVAS_BASE_URL`, `CANVAS_OAUTH_CLIENT_ID`, `CANVAS_OAUTH_CLIENT_SECRET`, `FRONTEND_BASE_URL` as well as `LTI_CONF_FOLDER`/`LTI_CONF_FILE_NAME`.
+- Two **developer keys** are needed in Canvas:
+  1. **LTI key** (LTI 1.3) with redirect/target `…/lti/launch/`, OIDC login `…/lti/login/` and the custom fields `canvas_course_id=$Canvas.course.id` and `canvas_user_id=$Canvas.user.id`
+  2. **API key** (OAuth2) with redirect URI `…/oauth/oauth-callback` and the scopes from `SCOPES_USED` enabled
+- Place the matching `lti_config_settings.json` (PyLTI1p3 format, incl. private key) under `src/lti/config/`.
+- In the organization, set `LMS Type = CANVAS` and `LMS API URL = CANVAS_BASE_URL`.
+- A local Canvas instance via Docker is described in [`docs/local_canvas.md`](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/docs/local_canvas.md). The guide comes from another project and needs to be adapted.
+- The README step "enter the LMS access token in the course" is **outdated**. This field is no longer used; access works exclusively via OAuth.
 
-### 8.3 Docker / Produktion
+### 8.3 Docker / production
 
-`docker-compose.yml` startet nginx (Port 8002 → 8000), `web` (gunicorn, `scripts/runserver.sh`: collectstatic + migrate) und Postgres (`db.env`). Mit `DEBUG≠TRUE` sind `SERVER_NAME` und die Postgres-Variablen Pflicht.
+`docker-compose.yml` starts nginx (port 8002 → 8000), `web` (gunicorn, `scripts/runserver.sh`: collectstatic + migrate) and Postgres (`db.env`). With `DEBUG≠TRUE`, `SERVER_NAME` and the Postgres variables are required.
 
 ---
 
-## 9. Auffälligkeiten und offene Punkte
+## 9. Issues and open points
 
-Diese Punkte sind für eine Moodle-Anbindung bzw. ein LMS-Abstraktionslayer relevant:
+These points are relevant for a Moodle integration or an LMS abstraction layer:
 
-1. **Kein LMS-Adapter:** Der Canvas-Code ist direkt in `app/canvas/*` und `canvas_oauth/*` verdrahtet. Die Views importieren die Canvas-Funktionen direkt, und `LMSTypeOptions` kennt nur `CANVAS`. Für Moodle bietet sich eine Schnittstelle mit den Operationen aus Abschnitt 1 an.
-2. **Zwei Quellen für die LMS-URL:** OAuth nutzt die globale ENV-Variable `CANVAS_BASE_URL`, die REST-Aufrufe nutzen `Organization.lms_api_url`.
-3. **Mandantenfähigkeit:** Der LTI-Launch verwendet immer `Organization.objects.first()`. Kurse werden nur über `lms_course_id` gefunden, ohne Organisation bzw. Issuer.
-4. **Upsert-Schlüssel beim Import:** `upsert_course_member` sucht nur nach `lms_id` und nicht nach `(course, lms_id)`. Dieselbe Person in zwei Kursen würde daher in den zuletzt importierten Kurs „umziehen“.
-5. **Canvas-spezifische Annahmen:** Der Name wird aus `sortable_name` per Split am Komma gebildet. Das Opt-in nutzt Classic Quizzes inkl. „richtiger“ Antwort. Die Gruppen-Logik basiert auf Group Categories.
-6. **Fehlerbehandlung bei fehlendem OAuth-Token:** Der Redirect durch die Middleware funktioniert bei API-`fetch`-Aufrufen nicht. Der Nutzer muss Teamable neu aus Canvas starten.
-7. **Sicherheit:** `SECRET_KEY` ist hart codiert. OAuth-Tokens liegen im Klartext in der DB. Das DRF-Token wird per URL übertragen und in einem nicht-HttpOnly-Cookie gespeichert. Sign-up-JWTs laufen nicht ab.
-8. **Ungenutzt oder unvollständig:** `Course.lms_access_token`, `TEAM_GENERATION_API_*`, nicht geroutete Viewsets, die Seite *Project sets* sowie die Onboarding-Schritte „Student profile“ und „Project setup“.
+1. **No LMS adapter:** The Canvas code is wired directly into `app/canvas/*` and `canvas_oauth/*`. The views import the Canvas functions directly, and `LMSTypeOptions` only knows `CANVAS`. For Moodle, an interface with the operations from section 1 would make sense.
+2. **Two sources for the LMS URL:** OAuth uses the global ENV variable `CANVAS_BASE_URL`, the REST calls use `Organization.lms_api_url`.
+3. **Multi-tenancy:** The LTI launch always uses `Organization.objects.first()`. Courses are only looked up by `lms_course_id`, without organization or issuer.
+4. **Upsert key on import:** `upsert_course_member` only searches by `lms_id`, not by `(course, lms_id)`. The same person in two courses would therefore "move" to the course imported last.
+5. **Canvas-specific assumptions:** The name is built from `sortable_name` by splitting at the comma. The opt-in uses Classic Quizzes incl. a "correct" answer. The group logic is based on group categories.
+6. **Error handling for a missing OAuth token:** The redirect by the middleware does not work for API `fetch` calls. The user has to relaunch Teamable from Canvas.
+7. **Security:** `SECRET_KEY` is hard-coded. OAuth tokens are stored in plain text in the DB. The DRF token is passed via the URL and stored in a non-HttpOnly cookie. Sign-up JWTs do not expire.
+8. **Unused or incomplete:** `Course.lms_access_token`, `TEAM_GENERATION_API_*`, unrouted viewsets, the page *Project sets* and the onboarding steps "Student profile" and "Project setup".
