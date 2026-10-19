@@ -51,16 +51,43 @@ Teamable spricht diese Schnittstelle über die Python-Bibliothek `canvasapi` an.
 4. Canvas gibt Teamable einen **Token** (Zugangsschlüssel), den Teamable pro Person speichert und bei Ablauf automatisch erneuert.
 5. Jede API-Anfrage enthält diesen Token. Teamable sieht damit genau das, was die Lehrperson in Canvas sehen darf.
 
+## Anmeldung, Rechte und Tokens
+
+* Lehrende melden sich über LTI an. Teamable legt dabei intern ein Konto an, für die Person gibt es aber kein eigenes Passwort.
+* Studierende kommen meist über den Import ins System. Sie sind dann nur als Eintrag in der Teilnehmerliste vorhanden, ohne Login. Öffnen sie das Tool selbst über LTI, bekommen sie die Rolle „Student“.
+* Es werden drei Dinge gespeichert, alle in der Teamable-Datenbank:
+    * der Canvas-Token (einer pro Person),
+    * der Teamable-Token fürs Frontend,
+    * die Session (Sitzung im Browser).
+* Rechte: Nur Lehrende des Kurses und Admins dürfen importieren, Teams bilden und exportieren.
+
 ## Ablauf aus Sicht der Lehrenden
 
 1. **Lehrperson klickt in Canvas auf „Teamable“:** Per LTI erfährt Teamable, wer sie ist und aus welchem Kurs sie kommt (kein eigenes Konto, ohne zweiten Login).  
 2. **Erlaubnis einholen:** Per OAuth2 klickt sie einmalig „Autorisieren“, Teamable erhält den Token.
 3. **Weiterleitung** in die Teamable-Oberfläche.
 4. **„Studierende importieren“:** Teamable ruft mit dem Token die Teilnehmerliste über die REST API ab und speichert sie.
-5. **Optional:** Antworten aus einem Opt-in-Quiz („Möchtest du mitmachen? Ja/Nein“) und Noten aus Aufgaben abrufen.
+5. **Optional:** Antworten aus einem Opt-in-Quiz („Möchtest du mitmachen? Ja/Nein“).
 6. **Teams bilden** und optional als Gruppen zurück nach Canvas schreiben.
 
 Alle Abrufe werden manuell von Lehrenden per Klick ausgelöst. Es gibt keine automatische Synchronisation im Hintergrund.
+
+```mermaid
+sequenceDiagram
+    actor L as Lehrperson
+    participant C as Canvas
+    participant T as Teamable
+    L->>C: Klickt auf Teamable im Kurs
+    C->>T: LTI-Launch (wer, welche Rolle, welcher Kurs)
+    T->>C: OAuth2 – Erlaubnis anfragen
+    L->>C: Autorisieren
+    C->>T: Token
+    L->>T: Studierende importieren
+    T->>C: REST API mit Token
+    C->>T: Teilnehmerliste, Quiz-Antworten, Punktzahlen
+    T->>C: Optional: Teams als Gruppen zurückschreiben
+```
+
 
 ## Abgerufene Felder  
 
