@@ -21,12 +21,19 @@ This page describes the ways Teamable Analytics can obtain course and student da
 
 ## What data Teamable needs
 
-To put the relevant endpoints into context: Teamable forms teams for a course. For this, it needs from the LMS
+Teamable forms teams for a course. What it currently needs from the LMS is listed for Canvas in [Backend: LMS integration](../../current-state/backend-lms-integration.md#1-summary-what-does-teamable-need-from-the-lms). The table maps each of these capabilities to Moodle 4.5:
 
-- the **course** and the **role** of the person opening Teamable,
-- the **participants** with name, identifier and role,
-- **criteria** for team formation, e.g. answers from a survey or grades,
-- a way to **write the finished teams back as groups**.
+| # | Capability | Moodle counterpart | |
+| --- | --- | --- | --- |
+| 1 | Launch from the course with user, course and role | [LTI 1.3](#lti-13-advantage) launch: `sub`, context `id`, `roles` | ✔ |
+| 2 | API access on behalf of the teacher | No OAuth2 flow. A web service token per teacher, copied by hand, or a technical user (see [Request to the computing centre](#request-to-the-computing-centre)) | **Gap** |
+| 3 | List the students of a course | `core_enrol_get_enrolled_users` | ✔ |
+| 4 | List the assignments of a course | `gradereport_user_get_grade_items` (all grade items) | ✔ |
+| 5 | Read grades per assignment and student | `gradereport_user_get_grade_items` | ✔ |
+| 6 | Create an opt-in survey | Not possible via the API. The teacher creates a choice, Teamable finds it with `mod_choice_get_choices_by_courses`. Otherwise only with a [custom plugin](#custom-moodle-plugin). | **Gap** |
+| 7 | Read the survey responses | `mod_choice_get_choice_results` | ✔ |
+| 8 | Create groups and assign members | `core_group_create_groupings`, `core_group_create_groups`, `core_group_assign_grouping`, `core_group_add_group_members` | ✔ |
+| 9 | Deep links into the LMS | `…/user/view.php?id={user}&course={course}`, `…/mod/choice/view.php?id={coursemodule}` | ✔ |
 
 ## The HTWG instance
 
