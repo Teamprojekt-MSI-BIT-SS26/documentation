@@ -7,6 +7,8 @@ Verglichen wurde der Code mit zwei Papern:
 
 Grundlage ist das Lesen des Codes. Ausgeführt wurde er nicht. Stand des Codes: 20.10.2026.
 
+Der **Priority-Algorithmus aus Paper 2 ist im Kern korrekt umgesetzt:** Hill Climbing, Bewertung nach Prioritäten, Tokenism-Funktion und Diversitätsmetriken entsprechen dem Paper. Über die API und die CLI funktioniert im Moment aber nur die Tokenism-Priorität. Projektanforderungen, Projektwünsche, soziale Präferenzen und Diversität lassen sich dort nicht als Priorität nutzen. Außerdem lassen sich die Paper-Ergebnisse nicht reproduzieren, weil die Vergleichsalgorithmen fehlen und die Benchmark-Skripte nicht mehr laufen.
+
 **Legende:** ✅ umgesetzt · ⚠️ teilweise oder abweichend · ❌ fehlt oder funktioniert nicht
 
 Zu allen Einträgen mit ⚠️ oder ❌ steht in [BUGS.md](BUGS.md), was zu tun ist.
