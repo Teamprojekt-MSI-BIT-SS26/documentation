@@ -1,0 +1,70 @@
+# Code vs. Paper: Stimmt die Implementierung?
+
+Verglichen wurde der Code in diesem Repository mit zwei Papern:
+
+- **Paper 1:** Hui et al. (2022), *Design Guidelines for a Team Formation and Analytics Software*
+- **Paper 2:** Hui et al. (2025), *Diversity Considerations in Team Formation Design, Algorithm, and Measurement*
+
+> Grundlage ist das Lesen des Codes. Ausgeführt wurde er nicht, weil in der lokalen Umgebung Abhängigkeiten fehlen.
+
+## Kurzfazit
+
+Der **Priority-Algorithmus aus Paper 2 ist im Kern korrekt umgesetzt.** Probleme gibt es an drei Stellen:
+
+1. in der API (Bug),
+2. bei einer Einstellung aus Paper 1, die keine Wirkung hat,
+3. bei der Reproduzierbarkeit der Paper-Ergebnisse.
+
+## Was korrekt umgesetzt ist ✅
+
+| Was das Paper beschreibt | Umsetzung im Code |
+|---|---|
+| **Hill Climbing:** viele Team-Sets parallel verbessern, die besten K behalten | `priority_algorithm.py`: Parameter `MAX_ITERATE`, `MAX_SPREAD`, `MAX_KEEP` |
+| **Gewichtete Prioritäten:** wichtigere Kriterien zählen exponentiell mehr | `scoring.py` mit 25 Bewertungsstufen („Buckets“) |
+| **Verbesserungsschritt:** zwei zufällige Studierende zwischen Teams tauschen | Standard-Mutation `RandomSwapMutation` |
+| **Tokenism vermeiden:** z. B. nie genau eine Frau allein in einem Team | `TokenizationPriority`, Formel und θ = 0,2 exakt wie im Paper |
+| **Diversität:** Gini-Simpson-Index pro Team | `DiversityPriority` |
+| **Startlösung:** zufällig oder mit dem Weight-Algorithmus (= GRR) | Einstellung `START_TYPE` |
+| **Metriken:** Intra-Heterogenität, Inter-Homogenität, Solo Status, Projektabdeckung, gemeinsame Zeiten | `benchmarking/evaluations/metrics/` |
+
+## Probleme ⚠️
+
+### 1. API-Bug: Nur eine Art von Priorität funktioniert *(wichtigster Punkt)*
+
+Über die API wird **jede** Priorität als Tokenism-Priorität eingelesen (`algorithm_options.py`, `parse_json`). Diversity-, Projekt- und Social-Prioritäten kommen daher nicht oder nur mit einem Fehler an. Laut Paper werden aber alle diese Typen unterstützt.
+
+**Lösung:** In `parse_json` die passende Klasse über `get_priority_from_type()` auswählen.
+
+### 2. „Include/Invert“ für Freunde und Feinde hat keine Wirkung
+
+Paper 1 zeigt im Dashboard Schalter für Freunde und Feinde. Die Optionen `friend_behaviour` und `enemy_behaviour` werden im Code zwar weitergereicht, aber **nirgends ausgewertet**.
+
+### 3. Die Paper-Ergebnisse lassen sich nicht nachstellen
+
+- Die Vergleichsalgorithmen **DRR** und **Group Matcher** fehlen im Repository.
+- Die Benchmark-Skripte, die sie verwenden, importieren Module, die es nicht mehr gibt (`algorithms.models`, `old.team_formation`).
+- Die Tabellen und Grafiken aus Paper 2 lassen sich daher nicht reproduzieren.
+
+### 4. Die Standardeinstellungen weichen vom Paper ab
+
+Im Paper wurde mit `MAXITER = 250`, `SPREAD = 100` und `K = 30` gerechnet. Die Standardwerte im Code sind deutlich kleiner, und die Suche **bricht nach 30 Sekunden ab** (`MAX_TIME`). Wer den Algorithmus mit den Standardwerten nutzt, bekommt also nicht die Qualität aus dem Paper.
+
+### 5. Social Satisfaction: Paper-Text und Code passen nicht zusammen
+
+- **Paper-Text:** Anteil der *zufriedenen Mitglieder*
+- **Code:** Anteil der Teams, in denen *alle* Mitglieder zufrieden sind
+
+Die Zahlen im Paper (z. B. 44,4 % = 4 von 9 Teams) passen zum Code. Ungenau ist hier also die Beschreibung im Paper, nicht der Code.
+
+## Kleinere Auffälligkeiten
+
+- **Diversität kann nie „voll erfüllt“ sein:** Bei einem Merkmal mit zwei Werten liegt der Gini-Simpson-Index höchstens bei 0,5. Diversitäts-Prioritäten erreichen dadurch nie die volle Punktzahl.
+- **Robinhood-Holistic-Mutation:** Findet sie keine Verbesserung, gibt sie eine beliebige statt der besten Kombination zurück. Das schadet nicht, weil das beste Ergebnis ohnehin erhalten bleibt, verschwendet aber Rechenzeit. Diese Mutation steht nicht im Paper.
+- **Fehlende Antworten:** Studierende ohne Antwort verfälschen die Diversitätsberechnung leicht.
+
+## Empfohlene nächste Schritte
+
+1. API-Bug beheben (Punkt 1).
+2. Die Freund/Feind-Schalter entweder umsetzen oder aus den Optionen entfernen (Punkt 2).
+3. Die Standardparameter dokumentieren oder an das Paper angleichen (Punkt 4).
+4. Wenn die Paper-Ergebnisse reproduziert werden sollen: DRR und Group Matcher wieder einbinden (Punkt 3).
