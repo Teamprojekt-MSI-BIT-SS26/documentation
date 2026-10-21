@@ -31,7 +31,7 @@
 
 LTI ist der Standard über alle LMS hinweg und der Login läuft bereits darüber, deshalb versuchen wir soweit wie möglich mit LTI zu arbeiten.
 
-Der Gruppen-Export aus Teamable in Moodle geht aber z.B. schon mal nicht über teamable -> Brauchen Moodle API und ggf. anderen Token dafür nochmal
+Der Gruppen-Export aus Teamable in Moodle geht aber z.B. schon mal nicht über LTI -> Brauchen Moodle API und ggf. anderen Token dafür nochmal
 
 
 | Zweck | Weg |
