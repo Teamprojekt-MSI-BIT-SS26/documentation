@@ -1,5 +1,7 @@
 # Paper-Vorgaben und ihre Umsetzung im Code
 
+**English:** [Paper Requirements and Their Implementation in the Code](PAPER_UMSETZUNG_EN.md)
+
 Verglichen wurde der Code mit zwei Papern:
 
 - **Paper 1:** Hui et al. (2022), *Design Guidelines for a Team Formation and Analytics Software*

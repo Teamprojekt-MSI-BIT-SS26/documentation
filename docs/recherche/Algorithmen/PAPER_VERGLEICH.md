@@ -1,5 +1,7 @@
 # Code vs. Paper: Stimmt die Implementierung?
 
+**English:** [Code vs. Paper: Does the Implementation Match?](PAPER_VERGLEICH_EN.md)
+
 Verglichen wurde der Code in diesem Repository mit zwei Papern:
 
 - **Paper 1:** Hui et al. (2022), *Design Guidelines for a Team Formation and Analytics Software*
