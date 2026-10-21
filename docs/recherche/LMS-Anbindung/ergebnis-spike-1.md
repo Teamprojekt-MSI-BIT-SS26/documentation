@@ -2,9 +2,10 @@
 
 ## Ausgangslage: Canvas
 
-- **Login:** LTI 1.3, Dozenten öffnen Teamable direkt aus dem Kurs
-- **Daten:** Canvas REST API mit OAuth2 (Teilnehmer, Opt-in-Quiz, Noten, Gruppen-Export)
-- **Problem:** Canvas steckt überall im Code, es gibt keine Abstraktionsschicht
+- **Anmeldung:** LTI 1.3. Lehrende öffnen Teamable direkt aus dem Canvas-Kurs.
+- **Zugriff auf Daten:** OAuth2. Die Lehrperson erlaubt Teamable einmalig den Zugriff in ihrem Namen.
+- **Gelesen** (Canvas REST API): Teilnehmerliste, Opt-in-Quiz, Punktzahlen aus Aufgaben
+- **Geschrieben** (Canvas REST API): Opt-in-Quiz, Teams als Gruppen
 
 → [Bisherige Canvas-Anbindung](bisherige-canvas-anbindung.md)
 
