@@ -11,7 +11,7 @@
 ## Moodle an der HTWG
 
 - **LTI 1.3** liefert Login, Kurs, Rolle und Teilnehmerliste (NRPS), aber keine Gruppen
-- **Web Services** sind aktiv und decken Teilnehmer, Noten und Gruppen ab
+- **API bzw. Web-Services** sind aktiv und decken Teilnehmer, Noten und Gruppen ab
 - **Lücken:** kein OAuth2 (Token manuell oder technischer Nutzer), Umfragen nicht per API anlegbar
 
 → [Moodle-API](moodle-api.md)
@@ -31,18 +31,17 @@
 
 LTI ist der Standard über alle LMS hinweg und der Login läuft bereits darüber, deshalb versuchen wir soweit wie möglich mit LTI zu arbeiten.
 
-Der Gruppen-Export aus Teamable in Moodle geht aber z.B. schon mal nicht über LTI -> Brauchen Moodle API und ggf. anderen Token dafür nochmal
+Funktionen wie z.B. der Gruppen-Export aus Teamable in Moodle brauchen aber eventuell die Moodle-API -> Brauchen Moodle API und ggf. anderen Token dafür nochmal
 
 
 | Zweck | Weg |
 | --- | --- |
 | Login | LTI 1.3 |
 | Studierenden-Import | LTI 1.3 (NRPS) |
-| Punktzahl, Umfragenergebnis, ... | Noch unklar |
-| Gruppen-Export | Moodle Web Services |
+| Punktzahl, Umfragenergebnis, Gruppen-Export | Noch unklar |
 
 
-!!! question "Offen: Token für die Moodle Web Services"
+!!! question "Offen: Token für die Moodle API"
     Wie Teamable den Token bekommt, ist noch zu klären:
 
     1. Kommt er direkt mit dem LTI-Login?
