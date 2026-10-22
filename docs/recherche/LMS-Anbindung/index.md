@@ -4,8 +4,9 @@ Recherche aus **Spike 1 – Evaluierung der Schnittstellen- und Integrationspfad
 
 ## Seiten
 
-- [Optionen zur Datenübertragung](uebertragungsoptionen.md) – Vergleich von API, CSV, Plugin und LTI
-- [Moodle-API – verfügbare Endpunkte](moodle-api.md) – Übersicht der Kurs- und Studierendendaten aus Moodle
+- [Optionen zur Datenübertragung](uebertragungsoptionen.md)
+- [Moodle-API](moodle-api.md)
+- [Bisherige Canvas-Anbindung](bisherige-canvas-anbindung.md)
 
 ## Ergebnis
 
