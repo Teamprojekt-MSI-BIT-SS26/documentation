@@ -9,5 +9,4 @@ Sammlung der Rechercheergebnisse.
 
 ## Algorithmen
 
-- [Paper-Vorgaben und ihre Umsetzung im Code (Deutsch)](Algorithmen/PAPER_UMSETZUNG.md) · [English](Algorithmen/PAPER_UMSETZUNG_EN.md)
-- [Code vs. Paper: Stimmt die Implementierung? (Deutsch)](Algorithmen/PAPER_VERGLEICH.md) · [English](Algorithmen/PAPER_VERGLEICH_EN.md)
+- [Paper-Vorgaben und ihre Umsetzung im Code (Deutsch)](Algorithmen/PAPER_UMSETZUNG.md) · [English](Algorithmen/PAPER_IMPLEMENTATION.md)
