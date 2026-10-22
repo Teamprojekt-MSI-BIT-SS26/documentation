@@ -11,40 +11,42 @@
 
 ## Moodle an der HTWG
 
-- **LTI 1.3** liefert Login, Kurs, Rolle und Teilnehmerliste (NRPS), aber keine Gruppen
-- **API bzw. Web-Services** sind aktiv und decken Teilnehmer, Noten und Gruppen ab
-- **Lücken:** kein OAuth2 (Token manuell oder technischer Nutzer), Umfragen nicht per API anlegbar
+| | Kann | Kann nicht |
+| --- | --- | --- |
+| **LTI 1.3** | Login aus dem Kurs, Kurs und Rolle, Teilnehmerliste (NRPS) | Noten, Umfrageantworten lesen, Gruppen anlegen |
+| **Moodle-API (Web Services)** | Teilnehmende, Noten, Umfrageantworten lesen, Gruppen anlegen. An der HTWG bereits aktiv. | Umfragen anlegen |
+
+**Lücken und Lösung:**
+
+- **Kein OAuth2:** Teamable bekommt den Token für die Moodle-API nicht automatisch wie bei Canvas.
+    - → Token je Lehrperson (einmal kopieren) oder technischer Nutzer, beides über einen Service beim Rechenzentrum.
+- **Umfragen nicht per API anlegbar:** Teamable kann das Opt-in nicht selbst erstellen.
+    - → Die Lehrperson legt die Umfrage in Moodle an, Teamable liest die Antworten.
 
 → [Moodle-API](moodle-api.md)
 
 ## Optionen im Vergleich
 
+Wie kommen Kurs- und Studierendendaten aus einem LMS in Teamable, ohne an ein bestimmtes LMS gebunden zu sein? Diese Wege gibt es grundsätzlich:
+
 | Option | Vorteile | Nachteile |
 | --- | --- | --- |
-| API-Anbindung | Automatisch, Daten aktuell | Pro LMS eigener Connector, Token nötig (Auth schwierig) |
-| CSV-Export/-Import | Einfach, kein Admin nötig | Manuell für Dozenten, Daten veralten |
-| LMS-Plugin | Alles direkt in Moodle, keine Auth Probleme | Nur Moodle, hoher Aufwand, Quellcode im Rechenzentrum anfassen |
-| **LTI** | Kein eigener Login, Standard für alle LMS, Teamable kann es schon | Keine Gruppen, Tool-Registrierung nötig |
+| **LTI** | Standard in allen LMS, Login ohne eigenes Konto, Teamable nutzt es schon bei Canvas | Liefert nur Login und Teilnehmerliste. Tool muss im LMS registriert werden. |
+| **LMS-API** (z. B. Moodle Web Services, Canvas REST API) | Automatisch, alle Daten, auch Gruppen zurückschreiben | Pro LMS eigene Anbindung, Token nötig |
+| **CSV-Export/-Import** | Einfach, funktioniert mit jedem LMS, keine Freigaben nötig | Manuell für Lehrende, Daten veralten, Gruppen nur von Hand zurück |
+| **LMS-Plugin** | Alles direkt im LMS, keine Token-Probleme | Nur für ein LMS, hoher Aufwand, Rechenzentrum muss es installieren und pflegen |
 
 → [Optionen zur Datenübertragung](uebertragungsoptionen.md)
 
 ## Entscheidung
 
-LTI ist der Standard über alle LMS hinweg und der Login läuft bereits darüber, deshalb versuchen wir soweit wie möglich mit LTI zu arbeiten.
-
-Funktionen wie z.B. der Gruppen-Export aus Teamable in Moodle brauchen aber eventuell die Moodle-API -> Brauchen Moodle API und ggf. anderen Token dafür nochmal
-
+Wir kombinieren zwei Wege: **LTI** ist der Standard über alle LMS und wird schon für den Login genutzt. Was LTI nicht kann, läuft über die **Moodle-API**.
 
 | Zweck | Weg |
 | --- | --- |
 | Login | LTI 1.3 |
 | Studierenden-Import | LTI 1.3 (NRPS) |
-| Punktzahl, Umfragenergebnis, Gruppen-Export | Noch unklar |
+| Punktzahlen, Umfrageergebnisse, Gruppen-Export | Moodle-API (Web Services) |
 
-
-!!! question "Offen: Token für die Moodle API"
-    Wie Teamable den Token bekommt, ist noch zu klären:
-
-    1. Kommt er direkt mit dem LTI-Login?
-    2. Müssen wir einen eigenen Ablauf implementieren?
-    3. Wird er manuell übergeben (z. B. technischer Nutzer durch das Rechenzentrum)?
+!!! question "Offen: Token für die Moodle-API"
+    Der LTI-Login liefert keinen Token, und Moodle 4.5 hat kein OAuth2. Realistisch sind ein Token je Lehrperson (einmal kopieren) oder ein technischer Nutzer. Beides braucht einen Service beim Rechenzentrum.
