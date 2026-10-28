@@ -10,3 +10,7 @@ Sammlung der Rechercheergebnisse.
 ## Algorithmen
 
 - [Paper-Vorgaben und ihre Umsetzung im Code (Deutsch)](Algorithmen/PAPER_UMSETZUNG.md) · [English](Algorithmen/PAPER_IMPLEMENTATION.md)
+
+## AI Tools
+
+- [Requirements for an AI tool](AI-Tools/requirements.md)
