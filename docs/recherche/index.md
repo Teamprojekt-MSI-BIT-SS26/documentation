@@ -11,6 +11,12 @@ Sammlung der Rechercheergebnisse.
 
 - [Paper-Vorgaben und ihre Umsetzung im Code (Deutsch)](Algorithmen/PAPER_UMSETZUNG.md) · [English](Algorithmen/PAPER_IMPLEMENTATION.md)
 
-## AI Tools
+## AI coding setup
 
-- [Requirements for an AI tool](AI-Tools/requirements.md)
+- [Overview](AI-coding-setup/1-overview.md)
+- [Tools](AI-coding-setup/2-tools.md)
+- [Operating models](AI-coding-setup/3-operating-models.md)
+- [Engines](AI-coding-setup/4-engines.md)
+- [Models](AI-coding-setup/5-models.md)
+- [Hardware](AI-coding-setup/6-hardware.md)
+- [Requirements](AI-coding-setup/7-requirements.md)

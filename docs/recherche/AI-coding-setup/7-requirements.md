@@ -1,4 +1,4 @@
-# Requirements for an AI tool
+# Requirements
 
 The current Claude subscription exceeds our budget, so we are looking for a cheaper alternative for AI-assisted development. Before comparing tools, we collect what the team actually needs.
 
