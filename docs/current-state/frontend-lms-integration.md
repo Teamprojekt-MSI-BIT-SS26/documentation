@@ -4,6 +4,7 @@
 >
 > **Important upfront:** The frontend **never** talks to Canvas directly. All LMS access goes through the backend (`teamable-backend`). The frontend only triggers actions (e.g. "import students") and displays data that the backend has fetched from the LMS before. What the backend actually calls in Canvas is described in the backend documentation. Here, the backend endpoints are only listed as the interface.
 
+
 ---
 
 ## 1. Technical overview
@@ -39,8 +40,8 @@ src/
 │   ├── (providers)/
 │   │   ├── query-client-provider.tsx → central fetch logic to the backend
 │   │   └── auth-user-provider.tsx    → login state + redirects
-│   └── page.tsx                   → start page: redirects to the first course
-├── hooks/                         → one hook per backend action (LMS hooks here)
+│   └── page.tsx                   → start page: redirects to signup, 401 or the user's first course
+├── hooks/                         → hooks for the backend actions (LMS hooks here), logout, toasts
 ├── _temp_types/                   → TypeScript types of the backend responses
 └── routes.ts                      → auth routes
 utils/
@@ -244,7 +245,7 @@ The cookie is turned into the header `Authorization: Token <token>` via [utils/a
 
 - [auth-user-provider.tsx](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28providers%29/auth-user-provider.tsx) loads `accounts/users/me/`.
   - Not logged in and not an auth page → redirect to `/accounts/login`
-  - Logged in and on an auth page → redirect to `/`
+  - Logged in and on an auth page → redirect to `/`. This branch never runs in practice: the provider only wraps the `(app)` routes ([(app)/layout.tsx](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28app%29/layout.tsx)), and the auth pages are outside of them. A logged-in user can therefore still open `/accounts/login`.
 - The frontend checks **no roles** (teacher vs. student) and no course access. Whether someone may see a course is decided by the backend alone. If `useCourse` does not get a course ID back, the frontend shows "Course not found".
 
 ---

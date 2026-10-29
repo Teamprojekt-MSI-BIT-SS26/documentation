@@ -4,7 +4,9 @@
 >
 > **Version:** `teamable-frontend` @ [`98ce1c8`](https://github.com/Teamable-Analytics/teamable-frontend/tree/98ce1c8), `teamable-backend` @ [`183a36c`](https://github.com/Teamable-Analytics/teamable-backend/tree/183a36c) (as of 2026-10-29). Paths are relative to `teamable-frontend/` unless stated otherwise.
 >
-> **Important upfront:** The frontend is already connected to `teamable-backend` and contains no mock data. All views load their data from the backend REST API, with two exceptions: Profiles is the only view without its own backend data, and Project Sets calls an endpoint that does not exist. Without a running backend, only the static pages (login, signup, 401, privacy) render. The start page `/` fails with HTTP 500, and every course view depends on `GET courses/{id}/`. The LMS-specific parts are described in [Frontend: LMS integration](frontend-lms-integration.md).
+> **Important upfront:** The frontend is already connected to `teamable-backend` and contains no mock data. Every view that shows data loads it from the backend REST API, with two exceptions: Profiles keeps its own data only locally, and Project Sets calls an endpoint that does not exist. Without a running backend, only the static pages (login, signup, 401, privacy, 404) can be opened, and logging in does not work. The start page `/` fails with HTTP 500, and the course views cannot load their course (`GET courses/{id}/`). The LMS-specific parts are described in [Frontend: LMS integration](frontend-lms-integration.md).
+
+**Claude Artifact** https://claude.ai/artifact/QMTdvhY9XSAHpRmnQL7UZi#setup
 
 ---
 
@@ -13,12 +15,12 @@
 | Topic | Status |
 |---|---|
 | Framework | Next.js 14.0.4 (App Router), React 18, TypeScript 5 (`strict`), see [package.json](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/package.json) |
-| Data fetching | TanStack React Query v5 with a global default `queryFn` and `defaultMutationFn` |
+| Data fetching | TanStack React Query v5 with a global default `queryFn`; mutations call the shared `defaultMutationFn` |
 | State | React Query cache, three React contexts (auth user, course, students), a global toast store |
 | UI | Tailwind CSS 3, shadcn/ui (Radix), lucide and Radix icons, TanStack Table, dnd-kit |
 | Forms | Formik + Yup |
 | Node | v20.16.0 (`.nvmrc`) |
-| Configuration | `.env` with `BACKEND_BASE_URI`, value `http://localhost:8000` in [sample.env](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/sample.env). The Project Sets page also reads `NEXT_PUBLIC_BACKEND_URL`, which is not configured anywhere |
+| Configuration | `.env` with `BACKEND_BASE_URI`, value `http://localhost:8000` in [sample.env](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/sample.env). The Project Sets page also reads `NEXT_PUBLIC_BACKEND_URL`, which is defined neither in `sample.env` nor in `next.config.js` |
 | Code quality | ESLint (`next/core-web-vitals`, `@tanstack/eslint-plugin-query` and own style rules) |
 | CI | [check.yml](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/.github/workflows/check.yml): `yarn lint` and `tsc`. No tests, no build |
 | Tests | Jest and Cypress are set up, each with one example test only |
@@ -33,7 +35,7 @@ yarn                  # install dependencies (missing in the README)
 yarn dev              # http://localhost:3000
 ```
 
-A running `teamable-backend` on port 8000 and an instructor signup token are required (see the [README](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/README.md)). For setups without Canvas, see section 8 of [Frontend: LMS integration](frontend-lms-integration.md).
+The setup in the [README](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/README.md) needs a running `teamable-backend` on port 8000 and an instructor signup token for the first account. For setups without Canvas, see section 8 of [Frontend: LMS integration](frontend-lms-integration.md).
 
 All commands work at this commit with Node 20.16.0 and Yarn 1.22.22:
 
@@ -51,7 +53,7 @@ teamable-frontend/
 ├── src/
 │   ├── app/                              → Next.js App Router (folder = route)
 │   │   ├── layout.tsx                    → root layout: font, QueryClientProvider, Toaster
-│   │   ├── page.tsx                      → "/": redirects to the first course
+│   │   ├── page.tsx                      → "/": redirects to signup, 401 or the user's first course
 │   │   ├── not-found.tsx                 → 404 page
 │   │   ├── (providers)/                  → QueryClient (fetch logic) + AuthUserContext
 │   │   ├── (accounts)/                   → login, signup, 401, authenticate (route handler)
@@ -67,26 +69,26 @@ teamable-frontend/
 │   │           └── project-sets/         → project set list (not working)
 │   ├── components/                       → Navbar, Footer, Logo, SearchBar, selectors
 │   │   ├── ui/                           → 24 shadcn/ui building blocks incl. DataTable
-│   │   └── views/Page.tsx                → page frame for all views: breadcrumbs, title, actions
+│   │   └── views/Page.tsx                → page frame of the course views and privacy: breadcrumbs, title, actions
 │   ├── hooks/                            → 14 files: 12 backend hooks, logout, toasts
 │   ├── _temp_types/                      → hand-written types of the backend responses
 │   ├── lib/utils.ts                      → cn() (merges Tailwind classes)
 │   ├── routes.ts                         → auth routes
 │   └── types.ts                          → Action, NonEmptyArray
 ├── utils/                                → auth header from the cookie (client/server), title()
-├── public/                               → logo, login image
+├── public/                               → logo, login image (plus two unused SVGs)
 ├── test/, cypress/                       → example tests
 └── next.config.js, tailwind.config.{js,ts}, Dockerfile, docker-compose.yml
 ```
 
 **Conventions:**
 
-- **Route groups:** `( … )` folders are used for layout areas (`(app)`, `(accounts)`, `(marketing)`, `(providers)`) and for private subfolders inside routes (`(hooks)`, `(components)`, `(table)`).
+- **Route groups:** `( … )` folders add no URL segment. They are used for layout areas (`(app)`, `(accounts)`, `(marketing)`), for the provider files (`(providers)`) and for private subfolders inside routes (`(hooks)`, `(components)`, `(table)`).
 - **Hook files:**
   - `src/hooks/` uses kebab-case (`use-generate-teams.tsx`).
   - Hooks inside route folders use camelCase (`useCourse.tsx`, `useSetupSteps.tsx`, `useStudents.tsx`).
 - **Component files:**
-  - Most components are PascalCase (`Navbar.tsx`, `SetupStepDetailCard.tsx`).
+  - Most own components outside `components/ui/` are PascalCase (`Navbar.tsx`, `SetupStepDetailCard.tsx`).
   - Kebab-case or lowercase: `components/ui/*`, `students/(table)/*`, all `columns.tsx`, `(providers)/*` and `components/icons.tsx`.
 - **Import aliases:** `@/*` → `src/*` and `@public/*` → `public/*` ([tsconfig.json](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/tsconfig.json)). `utils/` sits outside `src/` and is imported with relative paths.
 
@@ -97,9 +99,9 @@ teamable-frontend/
 | File | Purpose |
 |---|---|
 | [(providers)/query-client-provider.tsx](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28providers%29/query-client-provider.tsx) | Central fetch logic. `defaultQueryFn` (GET, `queryKey[0]` = path) and `defaultMutationFn` (POST) call `${BACKEND_BASE_URI}/api/v1/…` with `Authorization: Token …` (lines 18–65) |
-| [(providers)/auth-user-provider.tsx](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28providers%29/auth-user-provider.tsx) | `AuthUserContext`: loads `accounts/users/me/` and redirects between login and app routes (lines 35–47) |
-| [hooks/use-auth-user-query.ts](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/hooks/use-auth-user-query.ts) | Own `queryFn` for `accounts/users/me/` (not the default one). Also used on the server by the start page |
-| [course/[courseId]/(hooks)/useCourse.tsx](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28app%29/course/%5BcourseId%5D/%28hooks%29/useCourse.tsx) | `CourseContext`: loads `courses/{id}/`, provides `courseId`, name, sections and `lmsType`. Shows "Course not found" if there is no course (lines 35–69) |
+| [(providers)/auth-user-provider.tsx](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28providers%29/auth-user-provider.tsx) | `AuthUserContext`: loads `accounts/users/me/` and redirects to the login if nobody is logged in (lines 35–47). It only wraps the `(app)` routes, so its code for sending logged-in users away from the login and signup pages never runs |
+| [hooks/use-auth-user-query.ts](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/hooks/use-auth-user-query.ts) | Hook with its own `queryFn` for `accounts/users/me/` (not the default one). The start page calls the same fetch function `authUserQueryFn` on the server |
+| [course/[courseId]/(hooks)/useCourse.tsx](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28app%29/course/%5BcourseId%5D/%28hooks%29/useCourse.tsx) | `CourseContext`: loads `courses/{id}/`, provides `courseId`, name, sections and `lmsType`. Shows "Course not found" if no course comes back (lines 35–69) |
 | [hooks/use-generate-teams.tsx](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/hooks/use-generate-teams.tsx) | Team generation: `POST courses/{id}/generate_teams/` with `{ attribute }`, then a toast with a link to the new team set (lines 21–44) |
 | [course/[courseId]/components/GenerateTeamsAttributeSelector.tsx](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28app%29/course/%5BcourseId%5D/components/GenerateTeamsAttributeSelector.tsx) | Dialog: select a grade attribute, then `onSubmit({ attribute })` |
 | [components/GradeSourceAttributeSelector.tsx](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/components/GradeSourceAttributeSelector.tsx) | Combobox over `GET courses/{id}/grade-attributes/` |
@@ -130,7 +132,7 @@ teamable-frontend/
 - **Server components outside the cache:**
   - The start page `/` fetches `accounts/users/me/` on the server.
   - The Project Sets page calls `fetch` directly with `NEXT_PUBLIC_BACKEND_URL`.
-- **Client state** lives in three contexts:
+- **Contexts:** three React contexts share data across components:
   - `AuthUserContext` (logged-in user)
   - `CourseContext` (current course)
   - `StudentsContext` (filters and the current student page)
@@ -207,7 +209,7 @@ These are the places in the current code that the team generation touches. They 
 | Request of the team generation (today only `attribute`) | [use-generate-teams.tsx:8-10, 23-28](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/hooks/use-generate-teams.tsx#L8-L28), [GenerateTeamsAttributeSelector.tsx](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28app%29/course/%5BcourseId%5D/components/GenerateTeamsAttributeSelector.tsx) |
 | Result types | `teamSet.ts`, `team.ts`; unused related types in `projects.ts`, `relationship.ts` |
 | Result display (read-only today) | [team-sets/[teamSetId]/page.tsx](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28app%29/course/%5BcourseId%5D/team-sets/%5BteamSetId%5D/page.tsx), `columns.tsx` |
-| Student attributes (local only today) | `course/[courseId]/profiles/`, disabled wizard step `STUDENT_PROFILES` ([useSetupSteps.tsx:164-171](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28app%29/course/%5BcourseId%5D/setup/%28hooks%29/useSetupSteps.tsx#L164-L171)) |
+| Student profile questions (local only today) | `course/[courseId]/profiles/`, disabled wizard step `STUDENT_PROFILES` ([useSetupSteps.tsx:164-171](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28app%29/course/%5BcourseId%5D/setup/%28hooks%29/useSetupSteps.tsx#L164-L171)) |
 | Projects (not working today) | `course/[courseId]/project-sets/`, disabled wizard step `PROJECT_SETUP` ([useSetupSteps.tsx:189-196](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28app%29/course/%5BcourseId%5D/setup/%28hooks%29/useSetupSteps.tsx#L189-L196)) |
 | Backend access | `query-client-provider.tsx:18-65` for almost all calls; additionally `use-auth-user-query.ts:14-32` and `project-sets/page.tsx:9-21` |
 
@@ -219,14 +221,14 @@ These are the places in the current code that the team generation touches. They 
 
 `C/` = `src/app/(app)/course/[courseId]/`. Status:
 
-- **Complete:** works with the backend.
+- **Complete:** works as intended (with the backend where the view needs one).
 - **Partial:** works, but parts are disabled or commented out.
 - **Placeholder:** UI only, no backend.
 - **Not working:** fails at runtime.
 
 | View | Route | File | Purpose | Data source | Status |
 |---|---|---|---|---|---|
-| Start | `/` | `src/app/page.tsx` | Redirect: no user → signup, no course → 401, otherwise setup of the **first** course | `GET accounts/users/me/` (server) | Complete |
+| Start | `/` | `src/app/page.tsx` | Redirect: no user → signup, no course → 401, otherwise setup of the user's **first** course. Reached after the email login and via "Home" and the logo; the LMS launch skips it | `GET accounts/users/me/` (server) | Complete |
 | Login | `/accounts/login` | `(accounts)/accounts/login/page.tsx`, `LogInForm.tsx` | Login with email and password | `POST accounts/log-in/` | Complete |
 | Signup | `/accounts/signup?token=` | `(accounts)/accounts/signup/page.tsx`, `SignupForm.tsx` | Registration with invitation token, then automatic login | `POST accounts/sign-up/`, `POST accounts/log-in/` | Complete |
 | Auth error | `/accounts/401` | `(accounts)/accounts/401/page.tsx` | Static error message | – | Complete |
@@ -250,11 +252,11 @@ These are the places in the current code that the team generation touches. They 
   - No auth header is sent.
   - The endpoint `teamset-templates` does not exist in `teamable-backend`.
   - Clicking a row redirects to `project-sets/{id}`, which has no route.
-  - Without a backend the page fails with `Failed to parse URL from undefined/api/v1/teamset-templates`.
+  - When the page is opened, the server fails with `Failed to parse URL from undefined/api/v1/teamset-templates`. This does not depend on the backend, because the variable is undefined.
 
 **Navigation and layouts:**
 
-- **Navbar:** links only to Onboarding, Students and Manage Teams (= team sets) ([Navbar.tsx](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/components/Navbar.tsx)).
+- **Navbar:** the menu has only Onboarding, Students and Manage Teams (= team sets). The logo links to `/` ([Navbar.tsx](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/components/Navbar.tsx)). The breadcrumb "Home" on every course view also points to `/`.
 - **Layouts:**
   - root (`app/layout.tsx`)
   - app area with auth context and footer (`(app)/layout.tsx`)
@@ -265,8 +267,8 @@ These are the places in the current code that the team generation touches. They 
 ### 4.2 Summary
 
 - **Main flow:** The working app consists of the onboarding wizard, the student list, and team sets with a detail page. Together they cover the flow import students → import grades → generate teams → view and export teams.
-- **Everything else:** Profiles and Project Sets exist as routes but are not linked and have no working backend connection. Two of the five wizard steps that would use them are disabled. All other views are login, signup and error pages, or redirects.
-- **Tests:** none beyond the two example tests.
+- **Everything else:** Profiles and Project Sets exist as routes but are not linked and have no working backend connection. The related wizard steps (define profile, project setup) are disabled. The remaining views are login, signup, error and privacy pages, or redirects.
+- **Tests:** none for the app code; only the two example tests exist.
 
 ---
 
@@ -275,6 +277,6 @@ These are the places in the current code that the team generation touches. They 
 | Topic | Current state |
 |---|---|
 | Wording of the ticket | The ticket describes the frontend as "without a backend connection yet". In the code, the frontend is connected to `teamable-backend` (see above). The team should confirm whether Epic 2 builds on this connection |
-| Multiple courses | The start page always opens the first course of the user ([page.tsx:13](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/page.tsx#L13)). There is no course selection |
+| Multiple courses | The LMS launch opens the course it was started from ([teamable-backend lti/views.py:150](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/lti/views.py#L150)). The start page `/` always opens the user's first course ([page.tsx:13](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/page.tsx#L13)); this affects the email login and every click on "Home" or the logo. There is no course selection, so another course can only be reached by a new LMS launch from that course or by changing the URL |
 | Team generation parameters | The UI sends only one grade attribute. All other options of the team formation are not part of the frontend today |
-| Tests | No component or end-to-end tests exist; CI does not run tests |
+| Tests | No tests for the app code exist; CI does not run tests |
