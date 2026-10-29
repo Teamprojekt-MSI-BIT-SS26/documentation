@@ -308,13 +308,16 @@ Alternatively with Docker: `docker compose up --build` → http://localhost:8003
 | `yarn test` | Jest (example test only) |
 | `yarn cypress:open` | Cypress (example spec only) |
 
-CI ([.github/workflows/check.yml](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/.github/workflows/check.yml)) runs lint and build.
+CI ([.github/workflows/check.yml](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/.github/workflows/check.yml)) runs lint and the TypeScript check (`tsc`). Tests and the build are not part of CI.
 
 ---
 
 ## 9. Complete list of backend calls
 
-Base: `${BACKEND_BASE_URI}/api/v1/`. A trailing `/` is appended to every path automatically. GET calls go through the default `queryFn` (query key = path), POST calls through `defaultMutationFn` ([query-client-provider.tsx](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28providers%29/query-client-provider.tsx)).
+Base: `${BACKEND_BASE_URI}/api/v1/`. A trailing `/` is appended to every path automatically. GET calls go through the default `queryFn` (query key = path), POST calls through `defaultMutationFn` ([query-client-provider.tsx](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28providers%29/query-client-provider.tsx)). There are two exceptions:
+
+- `accounts/users/me/` uses its own `queryFn` in `use-auth-user-query.ts`. Its query key is the path plus the auth header, and `app/page.tsx` also calls it on the server.
+- `project-sets/page.tsx` calls `fetch` directly.
 
 | Method | Path | Body | Hook / file | LMS |
 |---|---|---|---|---|
