@@ -53,7 +53,7 @@ There are three kinds of tools:
 |---|---|---|---|
 | **Terminal tools** | [OpenCode](https://opencode.ai), [Claude Code](https://docs.claude.com/en/docs/claude-code/overview), [Codex CLI](https://github.com/openai/codex), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Aider](https://aider.chat) | Independent of the editor; strong in agent mode; can be scripted | No autocomplete while typing; changes are reviewed in the terminal or with Git |
 | **VS Code extensions** | [GitHub Copilot](https://github.com/features/copilot), [Cline](https://cline.bot), [Roo Code](https://roocode.com), [Kilo Code](https://kilocode.ai) | Work inside our editor; changes are shown as diffs in the editor; easy start | Bound to VS Code; not every extension offers autocomplete |
-| **AI editors** | [Cursor](https://cursor.com), [Windsurf](https://windsurf.com) | Agent mode, chat and autocomplete in one product | A separate editor based on VS Code; mostly bound to the provider's subscription |
+| **AI editors** | [Cursor](https://cursor.com), [Devin Desktop](https://devin.ai/desktop) (formerly Windsurf) | Agent mode, chat and autocomplete in one product | A separate editor based on VS Code; mostly bound to the provider's subscription |
 
 Some terminal tools also come with a VS Code extension, for example Claude Code. Tools also differ in which models they accept: OpenCode, Cline and Roo Code can connect to almost any provider or local engine, while Claude Code is built for Anthropic's models.
 
@@ -77,8 +77,8 @@ An engine loads a model into memory, runs it and offers it through an API on `lo
 | Kind | Examples |
 |---|---|
 | **Desktop apps with a user interface** | [LM Studio](https://lmstudio.ai), [Strata](https://github.com/niko1221/strata) |
-| **Command line and background service** | [Ollama](https://ollama.com), [llama.cpp](https://github.com/ggml-org/llama.cpp), [MLX](https://github.com/ml-explore/mlx) (Apple Silicon only) |
-| **Servers for several users** | [vLLM](https://docs.vllm.ai), [SGLang](https://docs.sglang.ai) |
+| **Command line and background service** | [Ollama](https://ollama.com), [llama.cpp](https://github.com/ggml-org/llama.cpp), [MLX](https://github.com/ml-explore/mlx) (mainly Apple Silicon) |
+| **Servers for several users** | [vLLM](https://docs.vllm.ai), [SGLang](https://docs.sglang.io) |
 
 The engines and when to use which are described on [Engines](4-engines.md).
 

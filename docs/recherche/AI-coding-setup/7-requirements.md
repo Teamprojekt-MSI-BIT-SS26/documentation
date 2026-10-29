@@ -1,6 +1,6 @@
 # Requirements
 
-The current Claude subscription exceeds our budget, so we are looking for a cheaper alternative for AI-assisted development. Before comparing tools, we collect what the team actually needs.
+The current Claude subscription exceeds our budget, so we are looking for a cheaper alternative for AI-assisted development. Before comparing tools, we collect what the team actually needs. The results are summarized under [Decisions](#decisions).
 
 ## Decisions and the questions they need
 
@@ -20,3 +20,34 @@ The current Claude subscription exceeds our budget, so we are looking for a chea
 4. How often did a limit or waiting time slow you down? (never / rarely / often)
 5. What is indispensable for you? (open)
 6. Which computer do you use? (e.g. MacBook with M2, 16 GB RAM)
+
+## Results
+
+6 of 8 team members answered.
+
+| # | Question | Answers |
+|---|---|---|
+| 1 | Mode | agent: 6 |
+| 2 | Used for | writing code: 6, explaining code: 6, documentation: 6, debugging: 5, research: 5, refactoring: 2, Git / pull requests: 1 |
+| 3 | Hours per week | 5–10: 6 |
+| 4 | Slowed down by limits | never: 3, rarely: 3 |
+| 5 | Indispensable | agent mode: 2 |
+| 6 | Computer | MacBook M1, 16 GB RAM: 3; MacBook M1 Pro, 16 GB RAM: 1; Windows laptop with Intel i7, 16 GB RAM: 1; Windows laptop with AMD Ryzen 5000, 8 GB RAM: 1 |
+
+## Decisions
+
+| # | Decision | Result |
+|---|---|---|
+| 1 | **Type of tool** | Everyone mainly uses agent mode, so only tools with agent mode qualify. |
+| 2 | **Pricing model** | Usage is medium to high (5–10 hours per week in agent mode). Limits were rarely hit, but with the current paid subscription. A free tier is therefore probably not enough; we need an offer with a similar volume. The comparison checks this. |
+| 3 | **Same tool for everyone?** | Usage is similar for everyone, so everyone gets the same tool. |
+| 4 | **Local models possible?** | No for agent mode. All computers have at most 16 GB RAM and no strong graphics card. Models that work reliably in agent mode need more memory and would run slowly on this hardware. Local models are at most an addition for simple tasks. |
+| 5 | **Knock-out criteria** | Agent mode. |
+
+The main uses are writing and explaining code, documentation, debugging and research. Refactoring and Git are rarely used and do not decide the choice.
+
+This leaves cloud options with agent mode, one tool for the whole team:
+
+- a subscription or student offer
+- pay per token with a cheap model
+- an own server, only if HTWG offers GPU resources

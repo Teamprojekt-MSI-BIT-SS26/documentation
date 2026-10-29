@@ -4,7 +4,7 @@ This page describes the tools we can work with and how they differ. For an overv
 
 ## Modes
 
-Tools offer up to three modes. Which ones we need follows from the [survey](7-requirements.md#survey) (question 1).
+Tools offer up to three modes. Which ones we need follows from the [survey](7-requirements.md#survey).
 
 | Mode | What it does |
 |---|---|
@@ -40,19 +40,4 @@ VS Code extensions work inside the editor and show changes as diffs there.
 AI editors are separate editors based on VS Code with agent, chat and autocomplete built in. They are mostly used with the provider's subscription.
 
 - [Cursor](https://cursor.com)
-- [Windsurf](https://windsurf.com)
-
-## No longer maintained
-
-- **Continue:** was taken over by Cursor and is no longer developed. The code stays available as open source.
-
-## What to compare
-
-For each tool we look at:
-
-- Which modes it offers (agent, chat, autocomplete)
-- Which models and providers it can use, including local engines
-- Costs, free tiers and student offers
-- Limits such as requests per day
-- Data privacy: whether our code is used for training
-- Setup effort in VS Code
+- [Devin Desktop](https://devin.ai/desktop), formerly Windsurf

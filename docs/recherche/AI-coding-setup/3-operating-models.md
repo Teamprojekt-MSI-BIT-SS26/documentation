@@ -2,25 +2,9 @@
 
 The operating model decides where the model runs, who pays for it and which parts we have to set up ourselves. For an overview of all building blocks, see [Overview](1-overview.md).
 
-## Subscription
+## Local
 
-A fixed monthly price, usually with a VS Code extension included. Examples: [GitHub Copilot](https://github.com/features/copilot), [Cursor](https://cursor.com), [Claude Pro](https://claude.com/pricing).
-
-- **Pro:** easy to set up, predictable costs, usually strong models.
-- **Contra:** usage limits; costs per person; code is sent to the provider.
-- **To check:** student offers (e.g. [GitHub Education](https://education.github.com)) and free tiers.
-
-## Pay per token (API)
-
-We pay per request, measured in tokens. A tool such as [Cline](https://cline.bot), [Roo Code](https://roocode.com) or [OpenCode](https://opencode.ai) connects to the API of a provider or of a router such as [OpenRouter](https://openrouter.ai), which offers many proprietary and open-weight models through one interface.
-
-- **Pro:** pay only for actual usage; free choice of model; cheap open-weight models are available.
-- **Contra:** costs are hard to predict, because agents send long contexts and use many tokens; one API key needs to be managed per person or for the team.
-- **To check:** price per million tokens of suitable models; whether providers use our data for training.
-
-## Local on our own laptops
-
-The model runs on each team member's laptop with an engine such as [Ollama](https://ollama.com), [LM Studio](https://lmstudio.ai), [llama.cpp](https://github.com/ggml-org/llama.cpp), [MLX](https://github.com/ml-explore/mlx) or [Strata](https://github.com/niko1221/strata). The tool connects to the engine on `localhost`.
+The model runs on our own laptops: each team member runs it on their own machine with an engine such as [Ollama](https://ollama.com), [LM Studio](https://lmstudio.ai), [llama.cpp](https://github.com/ggml-org/llama.cpp), [MLX](https://github.com/ml-explore/mlx) or [Strata](https://github.com/niko1221/strata). The tool connects to the engine on `localhost`.
 
 - **Pro:** no running costs; works offline; code never leaves the laptop.
 - **Contra:** quality and speed are limited by the hardware; agent mode needs large models and a lot of RAM; each person sets up and maintains their own installation.
@@ -33,6 +17,22 @@ One machine with a strong GPU runs the model for the whole team, e.g. a rented G
 - **Pro:** larger models than on laptops; one setup for everyone; data stays under our control.
 - **Contra:** rental costs per hour or month; someone has to run and secure the server; access from outside must be protected.
 - **To check:** whether HTWG offers GPU servers or its own AI services; prices for GPU rental.
+
+## Pay per token (API)
+
+We pay per request, measured in tokens. A tool such as [Cline](https://cline.bot), [Roo Code](https://roocode.com) or [OpenCode](https://opencode.ai) connects to the API of a provider or of a router such as [OpenRouter](https://openrouter.ai), which offers many proprietary and open-weight models through one interface.
+
+- **Pro:** pay only for actual usage; free choice of model; cheap open-weight models are available.
+- **Contra:** costs are hard to predict, because agents send long contexts and use many tokens; one API key needs to be managed per person or for the team.
+- **To check:** price per million tokens of suitable models; whether providers use our data for training.
+
+## Subscription
+
+A fixed monthly price, usually with a VS Code extension included. Examples: [GitHub Copilot](https://github.com/features/copilot), [Cursor](https://cursor.com), [Claude Pro](https://claude.com/pricing).
+
+- **Pro:** easy to set up, predictable costs, usually strong models.
+- **Contra:** usage limits; costs per person; code is sent to the provider.
+- **To check:** student offers (e.g. [GitHub Education](https://education.github.com)) and free tiers.
 
 ## Hybrid
 
@@ -73,11 +73,11 @@ The expensive model writes the code, while searching and reading the code base, 
 
 ## Comparison
 
-| | Subscription | Pay per token | Local | Own server |
+| | Local | Own server | Pay per token | Subscription |
 |---|---|---|---|---|
-| **Running costs** | fixed per person | depends on usage | none | fixed for the server |
-| **Setup effort** | low | low to medium | medium | high |
-| **Maintenance** | none | low | per person | one person for the team |
-| **Agent mode** | yes | yes, depending on model | only with large models and much RAM | yes, depending on model and GPU |
-| **Limits** | usage limits of the plan | budget | hardware speed | GPU capacity |
-| **Data privacy** | code goes to the provider | code goes to the provider | stays on the laptop | stays on our server |
+| **Running costs** | none | fixed for the server | depends on usage | fixed per person |
+| **Setup effort** | medium | high | low to medium | low |
+| **Maintenance** | per person | one person for the team | low | none |
+| **Agent mode** | only with large models and much RAM | yes, depending on model and GPU | yes, depending on model | yes |
+| **Limits** | hardware speed | GPU capacity | budget | usage limits of the plan |
+| **Data privacy** | stays on the laptop | stays on our server | code goes to the provider | code goes to the provider |
