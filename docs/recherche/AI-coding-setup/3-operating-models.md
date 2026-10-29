@@ -1,6 +1,6 @@
 # Operating models
 
-The operating model decides where the model runs, who pays for it and which parts we have to set up ourselves. For an overview of all building blocks, see [Overview](1-overview.md).
+The operating model decides where the model runs, who pays for it and which parts we have to set up ourselves.
 
 ## Local
 

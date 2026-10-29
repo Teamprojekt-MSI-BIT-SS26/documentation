@@ -1,6 +1,6 @@
 # Models
 
-This page describes what a model needs: memory, context and quantization, what matters for agent mode and where to find models. For an overview of all building blocks, see [Overview](1-overview.md).
+This page describes what a model needs: memory, context and quantization, what matters for agent mode and where to find models.
 
 !!! note "Not every model runs on every engine"
     New architectures and quantization formats are not supported by every engine and every chip. See [Engines and models](4-engines.md#engines-and-models).
@@ -161,6 +161,7 @@ If a model does not fit into VRAM, the engine can keep a part of it in RAM and c
 - llama.cpp moves the experts to RAM with `--cpu-moe` or `--n-cpu-moe N` ([llama.cpp server](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md)).
 - Some engines even read parts of very large models from the SSD, e.g. Strata for DeepSeek. This needs a lot of free disk space and is slower.
 - Macs with unified memory do not split between VRAM and RAM, but the GPU may only use a part of the memory (see [Hardware](6-hardware.md#memory)).
+- Further reading: [Fiddler](https://arxiv.org/abs/2402.07033) (ICLR 2025) explains why computing the experts on the CPU is faster than copying them to the GPU.
 
 ## Quantization
 
@@ -628,17 +629,25 @@ Q4_K_M is the usual choice for local use.
 
 ### Popular models (October 2026)
 
-The following open-weight model families are among the most popular in the Ollama library and on Hugging Face (GGUF and MLX):
+Proprietary models are only available through an API or a subscription. Open-weight models can be run ourselves or used through an API.
 
-- **Qwen** (Alibaba): Qwen3.8 (e.g. 27B, Flash-Next), Qwen3.6-35B-A3B and the coding models Qwen3-Coder (30B-A3B) and Qwen3-Coder-Next
-- **DeepSeek**: DeepSeek-V4.1-Flash
-- **Gemma 4** (Google): up to 31B
-- **gpt-oss** (OpenAI): 20B and 120B
-- **Nemotron 3.5** (NVIDIA): small models, e.g. for laptops
-- **MiniMax-M3.1-Flash**
+| Family | Developer | Type | Examples |
+|---|---|---|---|
+| **Claude** | Anthropic | Proprietary | Opus, Sonnet, Haiku |
+| **GPT** | OpenAI | Proprietary | |
+| **Gemini** | Google | Proprietary | |
+| **Qwen** | Alibaba | Open-weight; the "Max" models only through an API | Qwen3.8 (e.g. 27B, Flash-Next), Qwen3.6-35B-A3B, Qwen3-Coder (30B-A3B), Qwen3-Coder-Next |
+| **DeepSeek** | DeepSeek | Open-weight | DeepSeek-V4.1-Flash |
+| **Gemma** | Google | Open-weight | Gemma 4, up to 31B |
+| **gpt-oss** | OpenAI | Open-weight | 20B, 120B |
+| **Nemotron** | NVIDIA | Open-weight | Nemotron 3.5, small models for laptops |
+| **MiniMax** | MiniMax | Open-weight | MiniMax-M3.1-Flash |
 
 Popularity changes quickly. Current lists:
 
-- [Ollama library, sorted by popularity](https://ollama.com/library?sort=popular)
-- [Hugging Face, trending GGUF models](https://huggingface.co/models?library=gguf&sort=trending)
-- [Hugging Face, trending MLX models](https://huggingface.co/models?author=mlx-community&sort=trending)
+| List | Shows |
+|---|---|
+| [OpenRouter rankings](https://openrouter.ai/rankings) | Models used most through an API, also for programming |
+| [Ollama library](https://ollama.com/library?sort=popular) | Popular models to run with Ollama |
+| [Hugging Face, GGUF](https://huggingface.co/models?library=gguf&sort=trending) | Trending models for llama.cpp, Ollama and LM Studio |
+| [Hugging Face, MLX](https://huggingface.co/models?author=mlx-community&sort=trending) | Trending models for Macs with Apple Silicon |

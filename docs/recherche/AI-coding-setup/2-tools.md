@@ -1,6 +1,6 @@
 # Tools
 
-This page describes the tools we can work with and how they differ. For an overview of all building blocks, see [Overview](1-overview.md).
+This page describes the tools we can work with and how they differ.
 
 ## Modes
 

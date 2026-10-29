@@ -6,8 +6,6 @@ This page describes the engines we can use to run a model ourselves. It is only 
 
 An engine loads a model into memory, runs it on the GPU or CPU and offers it through an API. The tool connects to this API with a base URL, e.g. `http://localhost:11434/v1` for Ollama. Most engines offer the OpenAI-compatible format, so almost every tool can connect to them.
 
-With a subscription or a pay-per-token API, the provider runs the engine and we do not need one.
-
 ## Overview
 
 | Engine | Kind | Operating systems | Licence |
