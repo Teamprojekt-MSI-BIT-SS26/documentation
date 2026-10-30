@@ -4,11 +4,14 @@ The operating model decides where the model runs, who pays for it and which part
 
 ## Local
 
-The model runs on our own laptops: each team member runs it on their own machine with an engine such as [Ollama](https://ollama.com), [LM Studio](https://lmstudio.ai), [llama.cpp](https://github.com/ggml-org/llama.cpp), [MLX](https://github.com/ml-explore/mlx) or [Strata](https://github.com/niko1221/strata). The tool connects to the engine on `localhost`.
+The model runs on our own laptops: each team member runs it on their own machine with an engine such as [Ollama](https://ollama.com), [LM Studio](https://lmstudio.ai), [llama.cpp](https://github.com/ggml-org/llama.cpp), [MLX](https://github.com/ml-explore/mlx) or [Strata](https://github.com/niko1221/strata).
+
+The model has to fit into the memory of the laptop (see [Models](5-models.md)), and the tool connects to the engine on `localhost`.
 
 - **Pro:** no running costs; works offline; code never leaves the laptop.
-- **Contra:** quality and speed are limited by the hardware; agent mode needs large models and a lot of RAM; each person sets up and maintains their own installation.
-- **To check:** which models run at a usable speed on the laptops from the survey (question 6).
+- **Contra:** quality and speed are limited by the hardware; agent mode needs large models with a large context and a lot of memory; each person sets up and maintains their own installation.
+
+Local models are useful in addition to a cloud option, for example for questions about code that should not leave the laptop, for working offline, or for simple questions without token costs (see [Hybrid](#hybrid)).
 
 ## Own server
 

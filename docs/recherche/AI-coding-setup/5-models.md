@@ -34,7 +34,23 @@ For a fast answer, the whole model should fit into the memory of the GPU: VRAM o
 
 The context is everything the model sees at once: our request, the code the tool sends along, the conversation so far and the answer. It is measured in tokens; one token is roughly ¾ of a word.
 
-Agents need a large context, because they read whole files and keep the history of their steps. Ollama recommends at least 64K tokens for Codex CLI ([Ollama docs](https://docs.ollama.com/integrations/codex)).
+### How much context for what
+
+| Use case | Context | Why |
+|---|---|---|
+| **Autocomplete** | 2–8K | Only the code around the cursor |
+| **Chat, explaining a file** | 8–16K | One or a few files plus the conversation |
+| **Debugging across several files, with logs** | 32K | Several files and error messages |
+| **Agent mode** | at least 64K | System prompt, tool definitions, many files and the history of all steps |
+| **Large tasks across the whole project** | 128K and more | Many files at once |
+
+The value for agent mode is the recommendation of Ollama for agents and coding tools ([Ollama context length](https://docs.ollama.com/context-length), [Claude Code with Ollama](https://docs.ollama.com/integrations/claude-code)). The other values are guide values: a line of code has roughly 10 tokens, so a file with 300 lines needs about 3K tokens.
+
+- **Engines often start with little context.** Ollama sets the default depending on the VRAM: 4K below 24 GB, 32K from 24 to 48 GB, and 256K from 48 GB ([Ollama](https://docs.ollama.com/context-length)). On a laptop, this is far too little for an agent.
+- **More context is not always better.** Models use information at the beginning and the end of the context best, and the answers get worse as the context grows ([Lost in the Middle](https://arxiv.org/abs/2307.03172), TACL 2023).
+- **Context costs.** More context means more memory (see below), a longer wait until the answer starts, and higher costs with an API, because every token in the context is paid with every request.
+
+### Memory for the context
 
 The context needs its own memory, the **KV cache**. It grows with every token. Example for Qwen3-Coder-30B-A3B (about 96 KB per token at 16 bits):
 

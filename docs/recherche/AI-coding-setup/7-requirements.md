@@ -51,3 +51,30 @@ This leaves cloud options with agent mode, one tool for the whole team:
 - a subscription or student offer
 - pay per token with a cheap model
 - an own server, only if HTWG offers GPU resources
+
+## Requirements list
+
+| Priority | Requirement | Source |
+|---|---|---|
+| Must-have | Agent mode | Survey questions 1 and 5 |
+| Must-have | Context of at least 64K tokens | [Context](5-models.md#how-much-context-for-what) |
+| Must-have | Usable with VS Code or in the terminal | Our development environment |
+| Must-have | Costs within the budget | [Costs and budget](#costs-and-budget) |
+| Must-have | Our code is not used for training | Data privacy |
+| Nice-to-have | Free choice of model | Flexibility for later changes |
+| Nice-to-have | Autocomplete | Survey question 1: not the main mode |
+| Nice-to-have | Local model for simple questions | [Our hardware](8-our-hardware.md#recommendation) |
+
+## Costs and budget
+
+- **Current cost:** about 24.50 € per person per month for the Claude subscription. For 8 team members, this is about 196 € per month.
+- **Budget:** still to be set together with the Product Owner.
+
+## Proposed candidates
+
+| # | Candidate | Operating model | Notes |
+|---|---|---|---|
+| 1 | [GitHub Copilot Student](2-tools.md#vs-code-extensions) | Student offer | Free for verified students; new sign-ups were paused in April 2026 |
+| 2 | OpenCode or Cline with an open-weight model through an API, e.g. [OpenRouter](https://openrouter.ai/models) | [Pay per token](3-operating-models.md#pay-per-token-api) | Costs depend on usage |
+| 3 | HTWG server with 2 × A100 and an open-weight coding model through vLLM | [Own server](3-operating-models.md#own-server) | No token costs; access still to be clarified, see [Possible server](8-our-hardware.md#possible-server) |
+| 4 | [Gemini CLI](2-tools.md#terminal-tools) (optional) | Free tier | 1,000 requests per day; free baseline for the comparison |

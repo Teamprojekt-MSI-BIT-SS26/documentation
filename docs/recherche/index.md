@@ -20,3 +20,4 @@ Sammlung der Rechercheergebnisse.
 - [Models](AI-coding-setup/5-models.md)
 - [Hardware](AI-coding-setup/6-hardware.md)
 - [Requirements](AI-coding-setup/7-requirements.md)
+- [Our hardware](AI-coding-setup/8-our-hardware.md)
