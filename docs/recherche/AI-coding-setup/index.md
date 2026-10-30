@@ -11,4 +11,5 @@ Research on cheaper alternatives for AI-assisted development in VS Code.
 - [Models](5-models.md)
 - [Hardware](6-hardware.md)
 - [Requirements](7-requirements.md)
-- [Our hardware](8-our-hardware.md)
+- [Our resources](8-our-resources.md)
+- [Evaluation](9-evaluation.md)

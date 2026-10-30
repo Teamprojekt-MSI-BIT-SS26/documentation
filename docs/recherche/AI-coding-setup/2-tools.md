@@ -30,9 +30,8 @@ VS Code extensions work inside the editor and show changes as diffs there.
 
 | Tool | Models | Notes |
 |---|---|---|
-| [GitHub Copilot](https://github.com/features/copilot) | Models offered by GitHub | Agent, chat and autocomplete. Free for verified students through [GitHub Education](https://education.github.com), but with a reduced choice of models since March 2026; new student sign-ups were paused in April 2026 ([GitHub docs](https://docs.github.com/en/copilot/how-tos/copilot-on-github/set-up-copilot/enable-copilot/set-up-for-students)). |
+| [GitHub Copilot](https://github.com/features/copilot) | Models offered by GitHub | Agent, chat and autocomplete. Free for verified students through [GitHub Education](https://education.github.com); on the student plan, models are only available through automatic selection ([GitHub docs](https://docs.github.com/en/copilot/concepts/billing/individual-plans)). |
 | [Cline](https://cline.bot) | Almost any provider and local engines | Plan and Act mode can use different models ([Cline docs](https://docs.cline.bot/core-workflows/plan-and-act)). |
-| [Roo Code](https://roocode.com) | Almost any provider and local engines | Each mode remembers its own model ([Roo Code docs](https://docs.roocode.com/basic-usage/using-modes)). |
 | [Kilo Code](https://kilocode.ai) | Almost any provider and local engines | Still to be checked. |
 
 ## AI editors

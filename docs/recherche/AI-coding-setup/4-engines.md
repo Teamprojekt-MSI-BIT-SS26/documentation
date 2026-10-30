@@ -56,7 +56,7 @@ Popular models and current lists of them are on [Models](5-models.md#popular-mod
 
 ## Engines and tools
 
-Almost all engines offer an OpenAI-compatible API. That is why tools such as OpenCode, Cline, Roo Code, Aider or Codex CLI can connect to any of them. The tool only needs the base URL of the engine and the name of the model.
+Almost all engines offer an OpenAI-compatible API. That is why tools such as OpenCode, Cline, Kilo Code, Aider or Codex CLI can connect to any of them. The tool only needs the base URL of the engine and the name of the model.
 
 Exceptions:
 

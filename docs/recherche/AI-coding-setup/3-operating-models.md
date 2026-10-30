@@ -23,7 +23,7 @@ One machine with a strong GPU runs the model for the whole team, e.g. a rented G
 
 ## Pay per token (API)
 
-We pay per request, measured in tokens. A tool such as [Cline](https://cline.bot), [Roo Code](https://roocode.com) or [OpenCode](https://opencode.ai) connects to the API of a provider or of a router such as [OpenRouter](https://openrouter.ai), which offers many proprietary and open-weight models through one interface.
+We pay per request, measured in tokens. A tool such as [Cline](https://cline.bot), [Kilo Code](https://kilocode.ai) or [OpenCode](https://opencode.ai) connects to the API of a provider or of a router such as [OpenRouter](https://openrouter.ai), which offers many proprietary and open-weight models through one interface.
 
 - **Pro:** pay only for actual usage; free choice of model; cheap open-weight models are available.
 - **Contra:** costs are hard to predict, because agents send long contexts and use many tokens; one API key needs to be managed per person or for the team.

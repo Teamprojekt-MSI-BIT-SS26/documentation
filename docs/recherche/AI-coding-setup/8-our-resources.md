@@ -1,6 +1,6 @@
-# Our hardware
+# Our resources
 
-This page applies the general information on [Models](5-models.md) and [Hardware](6-hardware.md) to the devices of our team, as collected in the [survey](7-requirements.md#results).
+This page describes the resources available to our team, our laptops and a possible server, and what they allow. It applies the general information on [Models](5-models.md) and [Hardware](6-hardware.md); the laptops were collected in the [survey](7-requirements.md#results).
 
 ## Our devices
 
@@ -23,11 +23,11 @@ Total memory = model + context + operating system and other programs (see [Param
 |---|---|---|---|---|
 | Qwen3.5 4B | 3.3 GB | ✓ | ✓ | tight |
 | Gemma 4 E4B | 6.6 GB | ✓ | ✓ | – |
-| Qwen3.5 9B | 6.6 GB | ✓ | ✓ | – |
+| Qwen3.5 9B | 6.6 GB | ✓, but very slow in our test | ✓ | – |
 | Gemma 4 12B | 8.0 GB | tight | tight | – |
 | gpt-oss 20B, Qwen3.5 27B, Qwen3-Coder 30B-A3B, Gemma 4 26B | 13–22 GB | – | – | – |
 
-With a model of about 7 GB, there is room for a context of a few GB, enough for questions and explanations, but not for an agent with a large context (see [Context](5-models.md#context)).
+With a model of about 7 GB, there is room for a context of a few GB, enough for questions and explanations, but not for an agent with a large context (see [Context](5-models.md#context)). In our [practical test](9-evaluation.md#practical-test) on a Mac with 32K context, macOS used swap even with the small models.
 
 ## Expected speed
 
@@ -73,6 +73,6 @@ Still to be clarified with the operator of the server:
 ## Recommendation
 
 - **Agent mode:** through a cloud option or the [possible server](#possible-server). Models that work reliably in agent mode, with a large context, do not fit on any of our laptops. This confirms decision 4 in the [requirements](7-requirements.md#decisions).
-- **Local as an optional addition on the Macs:** a small model such as Qwen3.5 9B or Gemma 4 E4B for questions and explanations, with a limited context. MLX versions are usually faster on Macs (see [Engines and models](4-engines.md#engines-and-models)).
+- **Local as an optional addition on the Macs:** a small model such as Qwen3.5 4B or Gemma 4 E4B for questions and explanations, with a limited context. Qwen3.5 9B was too slow in our [practical test](9-evaluation.md#practical-test). MLX versions are usually faster on Macs (see [Engines and models](4-engines.md#engines-and-models)).
 - **Windows laptop with 16 GB:** at most small models for simple questions; slow.
 - **Windows laptop with 8 GB:** local models are not recommended.
