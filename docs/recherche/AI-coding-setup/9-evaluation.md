@@ -125,13 +125,14 @@ To check steps 1 and 5, we ran a short test on a laptop:
 | Qwen3.5 4B (MLX, 4 bits) | 32K | 2 minutes 30 seconds | good | yes |
 | Qwen3.5 9B (4 bits) | 32K | 33 minutes | overengineered | yes |
 | Gemma 4 E4B (4 bits) | 32K | 1 minute 44 seconds | sufficient | yes |
+| Gemma 4 12B (4 bits) | 32K | 5 minutes 24 seconds | good | yes |
 
 What the test shows:
 
-- **Memory gets tight even with small models.** In all three tests, macOS used swap, i.e. moved parts of the memory to the SSD, with only Docker (3.5 GB) running besides the model. Whether the model itself caused the swap is unclear, but memory was tight. In daily work, the IDE and browser need memory as well. The reference model needs about 26 GB and is therefore clearly out of reach (step 5).
+- **Memory gets tight even with small models.** In all four tests, macOS used swap, i.e. moved parts of the memory to the SSD, with only Docker (3.5 GB) running besides the model. Whether the model itself caused the swap is unclear, but memory was tight. In daily work, the IDE and browser need memory as well. The reference model needs about 26 GB and is therefore clearly out of reach (step 5).
 - **The 9B model was very slow.** It took more than ten times as long as the 4B model. Possible reasons are swap, because the SSD is much slower than memory (see [Memory bandwidth](6-hardware.md#memory-bandwidth)), and the full context described below.
 - **32K context is not enough for an agent.** With the 9B model, the context ran full and the engine cut out its middle several times. The model lost parts of the task and the result became overengineered. This supports the requirement of at least 64K tokens (step 1) and matches *Lost in the Middle*.
-- **Small tasks can work locally.** The small models (Qwen3.5 4B, Gemma 4 E4B) delivered usable results for this small task, which matches local models as an optional addition (see [Our resources](8-our-resources.md#recommendation)).
+- **Small tasks can work locally.** Qwen3.5 4B and Gemma 4 E4B delivered usable results within about two minutes, Gemma 4 12B a good result within about five minutes, which matches local models as an optional addition (see [Our resources](8-our-resources.md#recommendation)).
 
 ## Recommendation
 
@@ -140,7 +141,7 @@ What the test shows:
 3. **GitHub Copilot Student only as a fallback.** It is free, but the model is chosen automatically, the usage is limited by AI credits, and training with our data has to be switched off by every team member.
 4. **Gemini CLI is not recommended** for our code, because it is unclear whether our code can be fully excluded from training.
 
-**Local models** are at most an optional addition on the Macs for simple questions, e.g. Gemma 4 E4B or Qwen3.5 4B (see [Practical test](#practical-test)).
+**Local models** are at most an optional addition on the Macs for simple questions, e.g. Gemma 4 E4B or Qwen3.5 4B for quick answers, or Gemma 4 12B for better answers at a slower speed (see [Practical test](#practical-test)).
 
 Before the whole team switches, the chosen option should be tested briefly in practice.
 
