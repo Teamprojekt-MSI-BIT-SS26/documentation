@@ -6,7 +6,20 @@
 >
 > **Important upfront:** The frontend is already connected to `teamable-backend` and contains no mock data. Every view that shows data loads it from the backend REST API, with two exceptions: Profiles keeps its own data only locally, and Project Sets calls an endpoint that does not exist. Without a running backend, only the static pages (login, signup, 401, privacy, 404) can be opened, and logging in does not work. The start page `/` fails with HTTP 500, and the course views cannot load their course (`GET courses/{id}/`). The LMS-specific parts are described in [Frontend: LMS integration](frontend-lms-integration.md).
 
-**Claude Artifact** https://claude.ai/artifact/QMTdvhY9XSAHpRmnQL7UZi#setup
+**Overview for developers:** [Teamable Frontend Map](https://claude.ai/artifact/QMTdvhY9XSAHpRmnQL7UZi) (interactive version of this page with views, flows, files and backend calls)
+
+## At a glance
+
+- **What it is:** The web interface of Teamable for teachers. They import students and grades from the LMS (currently Canvas), generate teams and export the teams back to the LMS. There is no interface for students.
+- **Connected to the backend:** Every view that shows data loads it live from `teamable-backend` (Django, REST under `/api/v1`). There are no mock data. Without a running backend, only the static pages open and logging in fails, so frontend work needs the backend running locally.
+- **One working main flow:** import students → import grades → generate teams → view teams and export them to the LMS. It is covered by the three pages in the navbar: Onboarding (5-step wizard, 2 steps disabled), Students and Team sets.
+- **Team generation is very simple today:** The UI sends exactly one grade attribute. The backend pairs "strong" and "weak" students; the call to an external algorithm API is commented out. The result can only be viewed, not edited.
+- **Two pages exist but do not work:**
+  - Profiles is a question editor without backend; saving writes nothing.
+  - Project Sets calls an endpoint that does not exist.
+  - Neither is linked in the navbar.
+- **Technology:** Next.js 14, React 18, TypeScript, TanStack Query, Tailwind with shadcn/ui. The response types are written by hand. Only two example tests exist; CI runs lint and `tsc`.
+- **Where to look next:** all pages are in [section 4](#4-views), the places Epic 2 touches in [section 3.5](#35-integration-points-for-epic-2), and what is missing or not working in [section 5](#5-known-gaps).
 
 ---
 
@@ -112,6 +125,32 @@ teamable-frontend/
 | [(accounts)/authenticate/route.ts](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28accounts%29/authenticate/route.ts) | Entry point after the LMS launch: sets the `token` cookie from the query parameter and redirects |
 | [_temp_types/](https://github.com/Teamable-Analytics/teamable-frontend/tree/98ce1c8/src/_temp_types) | Types of the backend responses (see [section 3.4](#34-data-shapes)) |
 
+**All hooks in [`src/hooks/`](https://github.com/Teamable-Analytics/teamable-frontend/tree/98ce1c8/src/hooks):**
+
+| Hook | Task | Backend call |
+|---|---|---|
+| `use-auth-user-query.ts` | Who is logged in? | `GET accounts/users/me/` |
+| `use-login.ts` | Log in, set the cookie, go to `/` | `POST accounts/log-in/` |
+| `use-sign-up.ts` | Register, then log in automatically | `POST accounts/sign-up/` |
+| `use-logout.ts` | Delete the cookie, go to the login page | – |
+| `use-onboarding-progress.ts` | Progress of the onboarding wizard | `GET courses/{id}/get_onboarding_progress/` |
+| `use-import-students-from-lms.ts` | Import students from the LMS | `POST courses/{id}/import_students_from_lms/` |
+| `use-create-opt-in-quiz.ts` | Create the opt-in quiz in Canvas | `POST courses/{id}/create_opt_in_quiz_lms/` |
+| `use-import-student-gradebook-data.ts` | Import grades from the LMS gradebook | `POST courses/{id}/import_gradebook_attribute_from_lms/` |
+| `use-grade-attributes.ts` | Available grade attributes | `GET courses/{id}/grade-attributes/` |
+| `use-generate-teams.tsx` | Generate teams | `POST courses/{id}/generate_teams/` |
+| `use-list-team-sets.ts` | All team sets of the course | `GET courses/{id}/get_team_sets/` |
+| `use-team-set.ts` | One team set with its teams | `GET courses/{id}/team-sets/{teamSetId}/` |
+| `use-export-team-set-lms.ts` | Export a team set to the LMS | `POST courses/{id}/export_team_to_lms/` |
+| `use-toast.ts` | Messages (toasts) at the edge of the screen | – |
+
+Backend calls outside `src/hooks/`:
+
+- `useCourse.tsx` loads the course (`GET courses/{id}/`).
+- `useStudents.tsx` loads the student list (`GET courses/{id}/students/?…`).
+- `src/app/page.tsx` loads the user on the server.
+- `project-sets/page.tsx` makes the broken call described in [section 4.1](#41-overview-of-all-views).
+
 ---
 
 ## 3. Data flows
@@ -133,15 +172,40 @@ teamable-frontend/
   - The start page `/` fetches `accounts/users/me/` on the server.
   - The Project Sets page calls `fetch` directly with `NEXT_PUBLIC_BACKEND_URL`.
 - **Contexts:** three React contexts share data across components:
-  - `AuthUserContext` (logged-in user)
-  - `CourseContext` (current course)
-  - `StudentsContext` (filters and the current student page)
+  - `AuthUserContext` (logged-in user), used by the navbar and the logout
+  - `CourseContext` (current course), used by all course views and most hooks
+  - `StudentsContext` (filters and the current page of the student list), used by the student table
 - **Pages** get their data from hooks and contexts and pass it to `PageView`, `DataTable` and dialogs via props.
 - **Actions** use the `Action` object ([types.ts](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/types.ts)): `onClick` → mutation → usually `refetch()` of the affected query.
 - **Feedback** is shown through a global toast store ([use-toast.ts](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/hooks/use-toast.ts)).
 - **Authentication:**
   - The cookie `token` is set by the login ([use-login.ts:20](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/hooks/use-login.ts#L20)) or by `/authenticate`.
   - `utils/auth.ts` (client) and `utils/auth-server.ts` (server) build the `Authorization` header from it.
+
+**Example: how a page gets its data** (team set list):
+
+1. The page calls the hook `use-list-team-sets.ts`.
+2. The hook passes only the path `courses/{id}/get_team_sets` as query key.
+3. `defaultQueryFn` in `query-client-provider.tsx` turns it into the request `${BACKEND_BASE_URI}/api/v1/courses/{id}/get_team_sets/` with the `Authorization` header from the cookie.
+4. The response is stored in the React Query cache, and the page shows it in a `DataTable`.
+
+**Example: how an action runs** ("Import students"):
+
+1. The button's `onClick` calls the mutation from `use-import-students-from-lms.ts`.
+2. `defaultMutationFn` sends `POST courses/{id}/import_students_from_lms/`.
+3. A toast shows success or failure.
+4. The page calls `refetch()` so the new data appears.
+
+**Ways to log in:**
+
+| Way | Flow | Where the user lands |
+|---|---|---|
+| Launch from Canvas | Backend → `/authenticate?token=…&path=…` sets the cookie | The course the launch came from |
+| Email login | `/accounts/login` → cookie → `/` | The user's first course |
+| Signup | `/accounts/signup?token=…` → automatic login → `/` | The user's first course |
+| Logout | Cookie is deleted | `/accounts/login` |
+
+The course views are protected only in the browser (client-side redirect to the login).
 
 ```mermaid
 flowchart LR
@@ -238,7 +302,7 @@ These are the places in the current code that the team generation touches. They 
 | Onboarding | `/course/[courseId]/setup` | `C/setup/page.tsx` | 5-step wizard: import students → define profile → import grades → project setup → generate teams | `GET get_onboarding_progress/`; `POST import_students_from_lms/`, `create_opt_in_quiz_lms/`, `import_gradebook_attribute_from_lms/`, `generate_teams/`; `GET grade-attributes/` | Partial: steps 2 and 4 are disabled and show placeholder text |
 | Students | `/course/[courseId]/students` | `C/students/page.tsx` | Paginated, searchable student list; import from the LMS | `GET students/?…`; `POST import_students_from_lms/`, `import_gradebook_attribute_from_lms/` | Partial: section filter and column are commented out |
 | Team sets | `/course/[courseId]/team-sets` | `C/team-sets/page.tsx` | List of team sets, "Generate teams" | `GET get_team_sets/`, `GET grade-attributes/`; `POST generate_teams/` | Complete |
-| Team set detail | `/course/[courseId]/team-sets/[teamSetId]` | `C/team-sets/[teamSetId]/page.tsx` | Teams with members, "Unassigned Students" row, export to the LMS | `GET team-sets/{teamSetId}/`; `POST export_team_to_lms/` | Complete (read-only) |
+| Team set detail | `/course/[courseId]/team-sets/[teamSetId]` | `C/team-sets/[teamSetId]/page.tsx` | Teams with members, "Unassigned Students" row, export to the LMS. Clicking a member opens their LMS profile | `GET team-sets/{teamSetId}/`; `POST export_team_to_lms/` | Complete (read-only) |
 | Profiles | `/course/[courseId]/profiles` | `C/profiles/page.tsx` | Editor for single- and multiple-choice questions with preview and drag and drop | Local Formik state | Placeholder, not linked anywhere |
 | Project sets | `/course/[courseId]/project-sets` | `C/project-sets/page.tsx` | List of project sets | `fetch` to `NEXT_PUBLIC_BACKEND_URL/api/v1/teamset-templates` (server) | Not working, not linked anywhere |
 | 404 | any unknown route | `src/app/not-found.tsx` | "Page not found" | – | Complete |
@@ -264,7 +328,19 @@ These are the places in the current code that the team generation touches. They 
   - marketing with plain navbar and footer (`(marketing)/layout.tsx`)
   - accounts (`(accounts)/accounts/layout.tsx`)
 
-### 4.2 Summary
+### 4.2 Onboarding steps
+
+The wizard is defined in [useSetupSteps.tsx](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28app%29/course/%5BcourseId%5D/setup/%28hooks%29/useSetupSteps.tsx). The current step is derived from `GET courses/{id}/get_onboarding_progress/`.
+
+| # | Step | What happens | Status |
+|---|---|---|---|
+| 1 | Import students | Import students from the LMS. As long as no students are imported, an opt-in quiz can be created in Canvas first | Active |
+| 2 | Define student profile | Placeholder text only | Disabled |
+| 3 | Elicit student information | Import grades from the LMS gradebook | Active |
+| 4 | (Optional) Project setup | Placeholder text only | Disabled |
+| 5 | Generate teams | Select a grade attribute, generate teams | Active |
+
+### 4.3 Summary
 
 - **Main flow:** The working app consists of the onboarding wizard, the student list, and team sets with a detail page. Together they cover the flow import students → import grades → generate teams → view and export teams.
 - **Everything else:** Profiles and Project Sets exist as routes but are not linked and have no working backend connection. The related wizard steps (define profile, project setup) are disabled. The remaining views are login, signup, error and privacy pages, or redirects.
@@ -272,11 +348,18 @@ These are the places in the current code that the team generation touches. They 
 
 ---
 
-## 5. Open points
+## 5. Known gaps
+
+What is missing or not working in the current code:
 
 | Topic | Current state |
 |---|---|
-| Wording of the ticket | The ticket describes the frontend as "without a backend connection yet". In the code, the frontend is connected to `teamable-backend` (see above). The team should confirm whether Epic 2 builds on this connection |
-| Multiple courses | The LMS launch opens the course it was started from ([teamable-backend lti/views.py:150](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/lti/views.py#L150)). The start page `/` always opens the user's first course ([page.tsx:13](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/page.tsx#L13)); this affects the email login and every click on "Home" or the logo. There is no course selection, so another course can only be reached by a new LMS launch from that course or by changing the URL |
-| Team generation parameters | The UI sends only one grade attribute. All other options of the team formation are not part of the frontend today |
-| Tests | No tests for the app code exist; CI does not run tests |
+| Profiles | Question editor without backend; saving only shows an `alert()`. Not linked |
+| Project Sets | Not working (see [section 4.1](#41-overview-of-all-views)). Not linked |
+| Onboarding | Steps 2 (define student profile) and 4 (project setup) are disabled ([useSetupSteps.tsx:164-196](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/%28app%29/course/%5BcourseId%5D/setup/%28hooks%29/useSetupSteps.tsx#L164-L196)) |
+| Student list | The section filter and the section column are commented out |
+| Team generation | The UI sends only one grade attribute. The backend splits the students into above and below average and pairs them from both ends of the list ([team_generation.py:68-100](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/app/services/team_generation.py#L68-L100)). A request to an external team generation API is commented out (lines 29–66); it uses the same endpoint (`api/generate/teams/`) and payload keys (`algorithm_options`, `students`, `team_generation_options`) as the API in the `algorithms` repository |
+| Results | Generated teams can only be viewed, not edited. `dnd-kit` is installed but only used in the Profiles editor |
+| Multiple courses | No course selection. The LMS launch opens the course it was started from ([teamable-backend lti/views.py:150](https://github.com/Teamable-Analytics/teamable-backend/blob/183a36c/src/lti/views.py#L150)). The start page `/` always opens the user's first course ([page.tsx:13](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/src/app/page.tsx#L13)); this affects the email login and every click on "Home" or the logo |
+| Types | Written by hand, not checked at runtime. The backend has no OpenAPI schema (no `drf-spectacular` or `drf-yasg`) |
+| Tests | No tests for the app code; only two example tests. CI runs lint and `tsc`, no tests |
