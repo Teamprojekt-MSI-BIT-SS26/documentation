@@ -52,7 +52,7 @@ The value for agent mode is the recommendation of Ollama for agents and coding t
 
 ### Memory for the context
 
-The context needs its own memory, the **KV cache**. It grows with every token. Example for Qwen3-Coder-30B-A3B (about 96 KB per token at 16 bits):
+The context needs its own memory, the **KV cache** (key-value cache). For every token in the context, the model stores two vectors per layer, a key and a value, so that it does not have to compute them again for every new token. The cache grows with every token. Example for Qwen3-Coder-30B-A3B (about 96 KB per token at 16 bits):
 
 | Context | KV cache (16 bits) | KV cache (8 bits) |
 |---|---|---|
@@ -595,14 +595,11 @@ The table shows the GGUF levels of llama.cpp for an 8B model (Llama 3). The qual
 
 Sources: [llama.cpp quantize](https://github.com/ggml-org/llama.cpp/blob/master/tools/quantize/README.md) and the level descriptions in its source code.
 
-### From 4 to 3 bits
+### Choosing a level
 
-- **Memory:** Q4_K_M → Q3_K_M saves about 18 % (4.58 → 3.74 GB).
-- **Quality:** The loss grows from +0.18 to +0.66, almost four times as much. Below 4 bits, quality drops much faster than between 8 and 4 bits. Q2_K loses about 20 times as much as Q4_K_M.
+- **Q4_K_M is the usual choice** for local use. Below 4 bits, quality drops much faster than between 8 and 4 bits.
 - **Larger model or more bits?** A larger model at 4 bits is usually better than a smaller one at more bits. A study found 4-bit 7B code models to be better than smaller models without quantization ([Lua study](https://arxiv.org/abs/2410.14766)).
 - **Code needs precision:** Perplexity measures general text. Code and tool calls have to be exact, so a quantized model should be tested with our shared test task.
-
-Q4_K_M is the usual choice for local use.
 
 ### Names of the levels
 

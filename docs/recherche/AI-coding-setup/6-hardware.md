@@ -27,33 +27,19 @@ Two values decide how fast a model feels:
 - **Waiting time until the answer starts:** The model first processes the whole prompt, including the code the tool sends along. This mainly depends on the computing power of the GPU. With long contexts, as used by agents, this can take a noticeable time.
 - **Tokens per second while answering:** For every generated token, the model reads its weights from memory. This mainly depends on the **memory bandwidth**. Rule of thumb: tokens per second ≈ memory bandwidth ÷ size of the model in memory.
 
-### Memory bandwidth
-
-Typical values:
-
-| Memory | Bandwidth |
-|---|---|
-| NVMe SSD (PCIe 4.0) | up to about 7 GB/s |
-| RAM in PCs and laptops (DDR4 / DDR5, two channels) | about 50–90 GB/s |
-| Mac with M1 | about 68 GB/s |
-| Mac with M4 | 120 GB/s |
-| Mac with M1 Pro | 200 GB/s |
-| Mac with M4 Max | up to 546 GB/s |
-| Graphics card NVIDIA RTX 4090 | about 1,000 GB/s |
-
-Sources: [Apple M1](https://en.wikipedia.org/wiki/Apple_M1), [Apple M1 Pro](https://www.apple.com/newsroom/2021/10/introducing-m1-pro-and-m1-max-the-most-powerful-chips-apple-has-ever-built/), [Apple M4 family](https://www.apple.com/newsroom/2024/10/apple-introduces-m4-pro-and-m4-max/), [NVIDIA RTX 4090](https://www.nvidia.com/en-us/geforce/graphics-cards/40-series/rtx-4090/). RAM values are calculated from the memory speed (e.g. DDR5-5600: 5,600 million transfers × 8 bytes × 2 channels ≈ 90 GB/s).
-
 ### Example
 
 With the rule of thumb, an 8B model with Q4_K_M (4.6 GB) answers at most at:
 
-| Model is read from | Tokens per second (upper limit) |
-|---|---|
-| NVMe SSD | about 1.5 |
-| Mac with M1 | about 15 |
-| RAM with DDR5 | about 20 |
-| Mac with M1 Pro | about 45 |
-| NVIDIA RTX 4090 | about 220 |
+| Model is read from | Bandwidth | Tokens per second (upper limit) |
+|---|---|---|
+| NVMe SSD (PCIe 4.0) | about 7 GB/s | about 1.5 |
+| Mac with M1 | about 68 GB/s | about 15 |
+| RAM with DDR5 (two channels) | about 90 GB/s | about 20 |
+| Mac with M1 Pro | 200 GB/s | about 45 |
+| NVIDIA RTX 4090 | about 1,000 GB/s | about 220 |
+
+Sources: [Apple M1](https://en.wikipedia.org/wiki/Apple_M1), [Apple M1 Pro](https://www.apple.com/newsroom/2021/10/introducing-m1-pro-and-m1-max-the-most-powerful-chips-apple-has-ever-built/), [NVIDIA RTX 4090](https://www.nvidia.com/en-us/geforce/graphics-cards/40-series/rtx-4090/). The RAM value is calculated from the memory speed: DDR5-5600 has 5,600 million transfers × 8 bytes × 2 channels ≈ 90 GB/s.
 
 Real values are lower, because other work is added. The comparison still shows the order of magnitude: reading from the SSD is far too slow for working with an agent, a graphics card is much faster than RAM.
 

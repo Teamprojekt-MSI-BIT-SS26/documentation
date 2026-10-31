@@ -4,13 +4,27 @@ This page describes the tools we can work with and how they differ.
 
 ## Modes
 
-Tools offer up to three modes. Which ones we need follows from the [survey](7-requirements.md#survey).
+Tools offer up to three modes.
 
 | Mode | What it does |
 |---|---|
 | **Agent** | Works on a task on its own: reads and edits files, runs commands, checks the result and repeats until the task is done. |
 | **Chat** | Answers questions and suggests code; we copy or apply the changes ourselves. |
 | **Autocomplete** | Suggests the next lines while we type. Only possible in tools that run inside the editor. |
+
+## Why the tool matters
+
+The same model can deliver different results in different tools. Parts of the tool can change benchmark scores by about as much as the difference between two model generations ([Coding benchmarks are misaligned with agentic software engineering](https://arxiv.org/abs/2606.17799)).
+
+| What the tool does | Influence on the result |
+|---|---|
+| **Choosing the context** | Which files and parts of the code are sent to the model, e.g. through a map of the repository ([Aider repo map](https://aider.chat/docs/repomap.html)) or a search in the code. Without the relevant code, even a strong model cannot solve the task. |
+| **Instructions and actions** | Which instructions the model gets and which actions it may use: read and edit files, run commands, start tests. |
+| **Format of the changes** | Whether the model returns whole files, diffs or search-and-replace blocks. Different models work better or worse with different formats ([Aider edit formats](https://aider.chat/docs/more/edit-formats.html)). |
+| **Workflow** | Whether the tool plans, checks the result with tests or a linter and fixes errors itself, or stops after one answer. |
+| **Tuning to models** | Some tools are built for the models of one provider, e.g. Claude Code for Anthropic's models. |
+
+Benchmark scores are therefore only valid for the combination of model and tool they were measured with.
 
 ## Terminal tools
 
@@ -38,5 +52,7 @@ VS Code extensions work inside the editor and show changes as diffs there.
 
 AI editors are separate editors based on VS Code with agent, chat and autocomplete built in. They are mostly used with the provider's subscription.
 
-- [Cursor](https://cursor.com)
-- [Devin Desktop](https://devin.ai/desktop), formerly Windsurf
+| Tool | Models | Notes |
+|---|---|---|
+| [Cursor](https://cursor.com) | Models offered by Cursor | Agent, chat and autocomplete. |
+| [Devin Desktop](https://devin.ai/desktop) | Models offered by Devin Desktop | Agent, chat and autocomplete. |

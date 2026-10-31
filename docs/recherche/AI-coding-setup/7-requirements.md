@@ -49,7 +49,7 @@ The main uses are writing and explaining code, documentation, debugging and rese
 This leaves cloud options with agent mode, one tool for the whole team:
 
 - a subscription or student offer
-- pay per token with a cheap model
+- usage-based API with a cheap model
 - an own server, only if HTWG offers GPU resources
 
 ## Requirements list
@@ -75,6 +75,6 @@ This leaves cloud options with agent mode, one tool for the whole team:
 | # | Candidate | Operating model | Notes |
 |---|---|---|---|
 | 1 | [GitHub Copilot Student](2-tools.md#vs-code-extensions) | Student offer | Free for verified students; models only through automatic selection |
-| 2 | OpenCode or Cline with an open-weight model through an API, e.g. [OpenRouter](https://openrouter.ai/models) | [Pay per token](3-operating-models.md#pay-per-token-api) | Costs depend on usage |
+| 2 | OpenCode or Cline with an open-weight model through an API, e.g. [OpenRouter](https://openrouter.ai/models) | [Usage-based API](3-operating-models.md#usage-based-api) | Costs depend on usage |
 | 3 | HTWG server with 2 × A100 and an open-weight coding model through vLLM | [Own server](3-operating-models.md#own-server) | No token costs; access still to be clarified, see [Possible server](8-our-resources.md#possible-server) |
 | 4 | [Gemini CLI](2-tools.md#terminal-tools) (optional) | Free tier | 1,000 requests per day; free baseline for the comparison |

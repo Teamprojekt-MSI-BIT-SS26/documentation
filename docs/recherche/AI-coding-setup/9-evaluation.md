@@ -83,7 +83,7 @@ The [possible server](8-our-resources.md#possible-server) has 2 × A100 with 40 
 
 ## 7. Comparison of the remaining options
 
-| | HTWG server | Pay per token | GitHub Copilot Student | Gemini CLI |
+| | HTWG server | Usage-based API | GitHub Copilot Student | Gemini CLI |
 |---|---|---|---|---|
 | **Model** | Qwen3.6-35B-A3B | Qwen3.6-35B-A3B | chosen automatically | Gemini models |
 | **Costs** | none for us, if HTWG provides the server | 0.10 $ per million input tokens, 0.90 $ per million output tokens | free for verified students | free |
@@ -93,17 +93,17 @@ The [possible server](8-our-resources.md#possible-server) has 2 × A100 with 40 
 
 Sources, as of 30 October 2026:
 
-- Pay per token: [OpenRouter, Qwen3.6-35B-A3B](https://openrouter.ai/qwen/qwen3.6-35b-a3b), [OpenRouter, zero data retention](https://openrouter.ai/blog/insights/zero-data-retention/)
+- Usage-based API: [OpenRouter, Qwen3.6-35B-A3B](https://openrouter.ai/qwen/qwen3.6-35b-a3b), [OpenRouter, zero data retention](https://openrouter.ai/blog/insights/zero-data-retention/)
 - GitHub Copilot: [plans](https://docs.github.com/en/copilot/concepts/billing/individual-plans), [students](https://docs.github.com/en/copilot/how-tos/copilot-on-github/set-up-copilot/enable-copilot/set-up-for-students), training by default: [heise](https://www.heise.de/en/news/Only-with-opt-out-GitHub-will-train-Copilot-models-with-user-data-in-the-future-11226787.html?view=print), [The Register](https://www.theregister.com/2026/03/26/github_ai_training_policy_changes/)
 - Gemini CLI: [quotas](https://geminicli.com/docs/resources/quota-and-pricing/), [terms and privacy](https://geminicli.com/docs/tos-privacy)
 
-The costs for pay per token depend on how many tokens we use. To estimate them, the token usage of our current subscription is needed.
+The costs of the usage-based API depend on how many tokens we use. To estimate them, the token usage of our current subscription is needed.
 
 GitHub Copilot and Gemini CLI cannot use the reference model. They are compared through the must-haves.
 
 ### Must-haves
 
-| Must-have | HTWG server | Pay per token | GitHub Copilot Student | Gemini CLI |
+| Must-have | HTWG server | Usage-based API | GitHub Copilot Student | Gemini CLI |
 |---|---|---|---|---|
 | Agent mode | ✓ | ✓ | ✓ | ✓ |
 | Context of at least 64K tokens | ✓ | ✓ | depends on the model | ✓ |
@@ -130,14 +130,14 @@ To check steps 1 and 5, we ran a short test on a laptop:
 What the test shows:
 
 - **Memory gets tight even with small models.** In all four tests, macOS used swap, i.e. moved parts of the memory to the SSD, with only Docker (3.5 GB) running besides the model. Whether the model itself caused the swap is unclear, but memory was tight. In daily work, the IDE and browser need memory as well. The reference model needs about 26 GB and is therefore clearly out of reach (step 5).
-- **The 9B model was very slow.** It took more than ten times as long as the 4B model. Possible reasons are swap, because the SSD is much slower than memory (see [Memory bandwidth](6-hardware.md#memory-bandwidth)), and the full context described below.
+- **The 9B model was very slow.** It took more than ten times as long as the 4B model. Possible reasons are swap, because the SSD is much slower than memory (see [Speed](6-hardware.md#speed)), and the full context described below.
 - **32K context is not enough for an agent.** With the 9B model, the context ran full and the engine cut out its middle several times. The model lost parts of the task and the result became overengineered. This supports the requirement of at least 64K tokens (step 1) and matches *Lost in the Middle*.
 - **Small tasks can work locally.** Qwen3.5 4B and Gemma 4 E4B delivered usable results within about two minutes, Gemma 4 12B a good result within about five minutes, which matches local models as an optional addition (see [Our resources](8-our-resources.md#recommendation)).
 
 ## Recommendation
 
 1. **HTWG server with the reference model**, if we get access. It meets all must-haves, causes no costs for us, and our code stays at HTWG. Qwen3.6-35B-A3B runs with vLLM on both A100 cards, with enough memory for a large context for the whole team.
-2. **Pay per token with the same model** until the server is available, or if it is not. Qwen3.6-35B-A3B through OpenRouter, with training excluded (`data_collection: deny`, zero data retention). Tools such as OpenCode or Cline can be used for both options; switching to the server later only changes the address of the API. The costs still have to be estimated from our token usage.
+2. **Usage-based API with the same model** until the server is available, or if it is not. Qwen3.6-35B-A3B through OpenRouter, with training excluded (`data_collection: deny`, zero data retention). Tools such as OpenCode or Cline can be used for both options; switching to the server later only changes the address of the API. The costs still have to be estimated from our token usage.
 3. **GitHub Copilot Student only as a fallback.** It is free, but the model is chosen automatically, the usage is limited by AI credits, and training with our data has to be switched off by every team member.
 4. **Gemini CLI is not recommended** for our code, because it is unclear whether our code can be fully excluded from training.
 
@@ -147,6 +147,6 @@ Before the whole team switches, the chosen option should be tested briefly in pr
 
 ## Limits of this evaluation
 
-- Only local operation on one laptop was tested briefly (see [Practical test](#practical-test)). The server, pay per token and the subscriptions were not tested; for them, the evaluation relies on benchmarks reported by the developers and on calculations.
+- Only local operation on one laptop was tested briefly (see [Practical test](#practical-test)). The server, the usage-based API and the subscriptions were not tested; for them, the evaluation relies on benchmarks reported by the developers and on calculations.
 - The tool around the model influences the result as much as the model itself (see step 2).
 - A short practical test of the chosen option is still recommended before the whole team switches.
