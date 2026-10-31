@@ -1,6 +1,6 @@
-# local_run/
+# Handover: Local Run with `local_run/`
 
-**Deutsch:** [local_run/ (Handover)](Handover_SkriptbedienungUndEinAusgabestruktur.md)
+**Deutsch:** [Handover: Lokaler Lauf mit `local_run/`](Handover_SkriptbedienungUndEinAusgabestruktur.md)
 
 Runs the team algorithm locally on your machine – without Canvas, without a server, without a database.
 
@@ -55,6 +55,8 @@ python -m local_run.run
 
 **Why:** This quickly shows you whether everything works. The script automatically uses
 `sample_payload.json` (12 students) and shows the teams in the terminal.
+A second example with 18 students is started with
+`python -m local_run.run local_run/sample_payload_18.json`.
 
 ### Step 6 (optional): Use your own data and save the result
 
@@ -64,6 +66,16 @@ python -m local_run.run my_data.json -o teams.json
 
 **Why:** With your own data you test real cases. `-o` saves the complete result
 as a JSON file so it can be processed further.
+
+### Step 7 (optional): Run the automated test
+
+```bash
+python -m unittest tests.test_local_run.test_local_run
+```
+
+**Why:** The test sends both sample files through all four algorithms and checks whether the
+teams are valid. It must end with `OK`. What exactly is checked is described in
+[Test Run with Sample Data](TestRunWithSampleData.md).
 
 ## Input structure
 
@@ -86,7 +98,8 @@ as a JSON file so it can be processed further.
 - `algorithm_type`: which algorithm – `random`, `weight`, `social` or `priority`.
 - `team_generation_options`: number of teams and allowed team size. `initial_teams` needs an `id` per team.
 
-A complete example is in `sample_payload.json`.
+Complete examples are in `sample_payload.json` (12 students) and
+`sample_payload_18.json` (18 students).
 
 ## Output structure
 

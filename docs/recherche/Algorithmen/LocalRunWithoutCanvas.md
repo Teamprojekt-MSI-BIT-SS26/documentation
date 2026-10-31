@@ -5,7 +5,8 @@
 ## What this is about
 
 Subtask from Epic 2: The team algorithm should run locally in VS Code, without Canvas.
-Result: It runs. A test run with 12 students formed 4 teams without errors.
+Result: It runs. Test runs with 12 and 18 students formed teams with all four algorithms without
+errors (details: [Test Run with Sample Data](TestRunWithSampleData.md)).
 
 Important: The algorithm could already be run locally before (see next section). The only thing
 missing on the machine were the installed libraries. What is new is a small folder `local_run/` that
@@ -43,9 +44,17 @@ API key and Canvas are dropped. From the validator onwards, everything runs as i
 | `local_run/__init__.py` | Empty file, marks the folder as a Python package | Without it, `python -m local_run.run` does not work |
 | `local_run/run.py` | Reads a JSON file, validates it, starts the algorithm, outputs the teams (with `-o` also as a file) | Does the same as the server, just without the server |
 | `local_run/sample_payload.json` | Test data: 12 fictional students with skill levels and friend/enemy relationships, 4 teams of 3 | Same format that Canvas sends, so it can be swapped for real data |
-| `local_run/README.md` | Guide: setup, running, input and output | So the team can use it without help (criterion "Handover") |
-| `local_run/DOKU.md` | This documentation | Records what was done and why |
+| `local_run/sample_payload_18.json` | Second dataset: 18 students, 2 attributes, 4 teams of 4–5 people | Covers the upper end of the 10–20 range |
+| `tests/test_local_run/` | Automated test: both datasets × all four algorithms | Makes the test run repeatable at any time (see [Test Run with Sample Data](TestRunWithSampleData.md)) |
 | `.gitignore` | Added the line `.venv/` | So the virtual environment does not end up on GitHub |
+
+The documentation for it is not in the `algorithms` repo but here in the `documentation` repo:
+
+| Document | Contents | Why |
+| --- | --- | --- |
+| [Handover](Handover_ScriptUsageAndInputOutputStructure.md) | Guide: setup, running, input and output | So the team can use it without help (criterion "Handover") |
+| This documentation | What already existed, what is new, open points | Records what was done and why |
+| [Test Run with Sample Data](TestRunWithSampleData.md) | Sample data, automated test, results | Proves the criterion "test run with 10–20 students" |
 
 **Not in the repo, only local: `.venv/`.** This is a separate, isolated Python installation for
 this project. It contains the libraries from `requirements.txt`. Without it, no path worked
@@ -53,7 +62,7 @@ this project. It contains the libraries from `requirements.txt`. Without it, no 
 
 The `.venv` does not belong on GitHub: It is several hundred MB in size, only works on your
 own machine and can be recreated from `requirements.txt` at any time. Each person creates
-it themselves (see `README.md`).
+it themselves (see [Handover](Handover_ScriptUsageAndInputOutputStructure.md), steps 1–3).
 
 ## Test run
 
@@ -67,12 +76,20 @@ Team 3: Clara, Greta, Max
 Team 4: David, Hannah, Sophie
 ```
 
+In addition, there is a second dataset with 18 students and an automated test that checks both
+datasets with all four algorithms:
+`python -m unittest tests.test_local_run.test_local_run`. What the test does exactly is described in
+[Test Run with Sample Data](TestRunWithSampleData.md).
+
 ## Open points
 
 - [ ] Decide: keep `local_run` (tests with the real Canvas format incl. validator) or
       only use `runs/cli.py` (CSV data, without validator) and delete `local_run`.
-- [ ] Check why all 3 friend pairs were separated in the test run (Anna/Ben, Emma/Felix,
-      Lena/Max). This may be due to the weighting of the test data or it may be a bug.
+- [x] Check why all 3 friend pairs were separated in the test run (Anna/Ben, Emma/Felix,
+      Lena/Max). **Resolved, not a bug:** The weight algorithm always fills the smallest team. In
+      the first round all teams are empty, so the first four people automatically end up in
+      different teams. The social algorithm keeps Anna/Ben and Lena/Max together. Details:
+      [Test Run with Sample Data](TestRunWithSampleData.md#observations).
 - [ ] Relationships use different formats: `"friend"` in the input, `-1` in the output.
 - [ ] In `algorithms/api/validators/generate_teams_validator.py` some methods are defined
       twice. Python only uses the second one, the first has no effect.

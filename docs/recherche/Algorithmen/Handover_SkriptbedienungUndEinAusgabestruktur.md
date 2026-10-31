@@ -1,6 +1,6 @@
-# local_run/
+# Handover: Lokaler Lauf mit `local_run/`
 
-**English:** [local_run/ (Handover)](Handover_ScriptUsageAndInputOutputStructure.md)
+**English:** [Handover: Local Run with `local_run/`](Handover_ScriptUsageAndInputOutputStructure.md)
 
 Startet den Team-Algorithmus lokal auf deinem Rechner – ohne Canvas, ohne Server, ohne Datenbank.
 
@@ -55,6 +55,8 @@ python -m local_run.run
 
 **Wieso:** So siehst du schnell, ob alles funktioniert. Das Skript nimmt automatisch
 `sample_payload.json` (12 Studierende) und zeigt die Teams im Terminal an.
+Ein zweites Beispiel mit 18 Studierenden startest du mit
+`python -m local_run.run local_run/sample_payload_18.json`.
 
 ### Schritt 6 (optional): Eigene Daten verwenden und Ergebnis speichern
 
@@ -64,6 +66,16 @@ python -m local_run.run meine_daten.json -o teams.json
 
 **Wieso:** Mit eigenen Daten testest du echte Fälle. `-o` speichert das komplette Ergebnis
 als JSON-Datei, damit man es weiterverarbeiten kann.
+
+### Schritt 7 (optional): Automatisierten Test laufen lassen
+
+```bash
+python -m unittest tests.test_local_run.test_local_run
+```
+
+**Wieso:** Der Test schickt beide Beispieldateien durch alle vier Algorithmen und prüft, ob die
+Teams gültig sind. Am Ende muss `OK` stehen. Was genau geprüft wird, steht in
+[Testlauf mit Beispieldaten](TestlaufMitBeispieldaten.md).
 
 ## Aufbau der Eingabe
 
@@ -86,7 +98,8 @@ als JSON-Datei, damit man es weiterverarbeiten kann.
 - `algorithm_type`: welcher Algorithmus – `random`, `weight`, `social` oder `priority`.
 - `team_generation_options`: Anzahl Teams und erlaubte Teamgröße. `initial_teams` braucht pro Team eine `id`.
 
-Ein vollständiges Beispiel steht in `sample_payload.json`.
+Vollständige Beispiele stehen in `sample_payload.json` (12 Studierende) und
+`sample_payload_18.json` (18 Studierende).
 
 ## Aufbau der Ausgabe
 
