@@ -9,6 +9,3 @@ Rechercheergebnisse
 - [Moodle-API](moodle-api.md)
 - [Bisherige Canvas-Anbindung](bisherige-canvas-anbindung.md)
 
-## Ergebnis
-
-Noch offen.

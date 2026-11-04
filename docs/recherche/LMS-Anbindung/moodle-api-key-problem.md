@@ -1,46 +1,46 @@
-# Moodle-Token: Kritische Punkte
+# Moodle Token: Critical Points
 
-Gilt für Moodle 4.5 (HTWG). Tests wurden in einer lokalen Moodle-Instanz gemacht, nicht bei der HTWG.
+Applies to Moodle 4.5 (HTWG). Tests were done in a local Moodle instance, not at HTWG.
 
-## Die drei Wege
+## The three approaches
 
-| # | Weg | Rechte des Tokens | Token nötig |
+| # | Approach | Token's permissions | Token needed |
 |---|---|---|---|
-| 1 | Service-Token (technischer User) | Alle Kurse | ja, einmalig im Backend |
-| 2 | Persönliches Token (Lehrperson) | Nur die Kurse der Lehrperson | ja, pro Lehrperson |
-| 3 | CSV-Export | - | nein |
+| 1 | Service token (technical user) | All courses | yes, once in the backend |
+| 2 | Personal token (teacher) | Only the teacher's courses | yes, per teacher |
+| 3 | CSV export | - | no |
 
 
-## Weg 1: Der technische User hat Rechte über ganz Moodle
+## Approach 1: The technical user has permissions across all of Moodle
 
-Er braucht `webservice/rest:use` und `moodle/course:managegroups`. Zusätzlich muss er den Kurs betreten dürfen, durch Einschreibung oder `moodle/course:view`. Das ist ein Lesezugriff auf Kursinhalte. Eine reine Gruppenrolle gibt es nicht.
+It needs `webservice/rest:use` and `moodle/course:managegroups`. In addition, it must be allowed to enter the course, either through enrolment or `moodle/course:view`. This is read access to course content. There is no pure group-only role.
 
-Einschätzung: Das werden die Admins wahrscheinlich nicht erlauben
+Assessment: The admins will probably not allow this.
 
-## Weg 2: Das Token lässt sich nicht automatisch holen
+## Approach 2: The token cannot be retrieved automatically
 
-- Es gibt keine Moodle-Funktion, die das Token eines Users herausgibt, und `login/token.php` bräuchte das Moodle-Passwort.
-- Die Lehrperson kopiert es einmal unter *Einstellungen → Sicherheitsschlüssel* und fügt es in Teamable ein.
-- Es braucht einen Dienst „Teamable“ in Moodle (mit den Gruppenfunktionen, z. B. `core_group_create_groups`).
-- Jeder mit dem Recht `moodle/webservice:createtoken` bekommt dann automatisch ein Token für diesen Dienst, sobald er die Sicherheitsschlüssel-Seite öffnet. Das gilt für Dienste, die nicht auf bestimmte Nutzer beschränkt sind.
+- There is no Moodle function that returns a user's token, and `login/token.php` would need the Moodle password.
+- The teacher copies it once under *Preferences → Security keys* and pastes it into Teamable.
+- A "Teamable" service is needed in Moodle (with the group functions, e.g. `core_group_create_groups`).
+- Anyone with the capability `moodle/webservice:createtoken` then automatically receives a token for this service as soon as they open the security keys page. This applies to services that are not restricted to specific users.
 
-- Einschätzung: Evtl. erlauben das die Admins
+- Assessment: The admins might allow this.
 
-## `createtoken` ist bei der HTWG vermutlich schon aktiv
+## `createtoken` is probably already active at HTWG
 
-Der Token-Kasten auf der Sicherheitsschlüssel-Seite erscheint nur, wenn Web-Services an sind und der User `createtoken` hat. Dort stehen sechs Dienste, der Dienst „Teamable“ könnte der siebte sein.
+The token box on the security keys page only appears if web services are enabled and the user has `createtoken`. Six services are listed there; the "Teamable" service could be the seventh.
 
-## Studierende können keine Gruppen anlegen
+## Students cannot create groups
 
-Getestet in der lokalen Instanz mit einem Studenten und einem Teamable-Token:
+Tested in the local instance with a student and a Teamable token:
 
-| Fall | Ergebnis |
+| Case | Result |
 |---|---|
-| Student ohne `webservice/rest:use` | abgelehnt (`missing capability: webservice/rest:use`) |
-| Student **mit** `rest:use` | Gruppe anlegen abgelehnt (`Manage groups`), Gruppen auflisten ebenfalls |
+| Student without `webservice/rest:use` | rejected (`missing capability: webservice/rest:use`) |
+| Student **with** `rest:use` | creating a group rejected (`Manage groups`), listing groups also rejected |
 
-Das Token gibt keine zusätzlichen Rechte. Jede Funktion prüft die Rechte des Users, und Studierende haben `moodle/course:managegroups` in keinem Kurs.
+The token grants no additional permissions. Every function checks the user's permissions, and students do not have `moodle/course:managegroups` in any course.
 
-## Offen bei der HTWG
+## Open at HTWG
 
-- Ob die Admins uns den Dienst „Teamable“ mit den Gruppenfunktionen anlegen lassen
+- Whether the admins will let us set up the "Teamable" service with the group functions
