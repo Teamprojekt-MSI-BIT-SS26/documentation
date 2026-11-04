@@ -88,7 +88,8 @@ The test ran only on the M1 Pro, the fastest of our laptops. On the M1 and the W
 ### Result for the laptops
 
 - **Agent mode: not possible.** Neither the reference model nor the smallest suitable model fits; for the models that fit, there is no evidence that they are good enough, and their context is too small.
-- **Small tasks: possible on the Macs.** Small models such as Qwen3.5 4B, Gemma 4 E4B or Gemma 4 12B answer simple questions with a limited context. MLX versions are usually faster on Macs (see [Engines and models](4-engines.md#engines-and-models)).
+- **Short questions in chat: possible on the Macs.** Small models such as Qwen3.5 4B, Gemma 4 E4B or Gemma 4 12B answer simple questions with a limited context. MLX versions are usually faster on Macs (see [Engines and models](4-engines.md#engines-and-models)).
+- **Agent mode with a small model: confirmed as unusable.** In the [test tasks of the evaluation](9-evaluation.md#5-test-task), Gemma 4 12B with OpenCode needed 24 minutes for a small bug fix and did not finish the other two tasks within 25 minutes each. Single steps took up to 12 minutes, because memory and swap ran full.
 - **Windows laptop with 16 GB:** at most small models for simple questions; slow.
 - **Windows laptop with 8 GB:** local models are not recommended.
 
@@ -130,9 +131,9 @@ Under our assumption of 2 × A100 40 GB, the server can run the reference model 
 
 ## Summary
 
-| Resource | Agent mode | Small tasks |
+| Resource | Agent mode | Short questions in chat |
 |---|---|---|
-| MacBooks, 16 GB | – | ✓ with small models |
+| MacBooks, 16 GB | – (confirmed in the [test](9-evaluation.md#5-test-task)) | ✓ with small models |
 | Windows laptop, 16 GB | – | at most, slow |
 | Windows laptop, 8 GB | – | – |
 | HTWG server, 2 × A100 40 GB (assumed) | ✓ with the reference model in FP8 | ✓ |

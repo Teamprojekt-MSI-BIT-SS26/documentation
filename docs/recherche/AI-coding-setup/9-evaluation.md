@@ -7,20 +7,20 @@
 | # | Option | Costs | Assessment |
 |---|---|---|---|
 | 1 | **HTWG server** (IOS) | none | Best option, if we get access: no limits, our code stays at HTWG. Access is not clarified yet. |
-| 2 | **GWDG Chat AI** (Academic Cloud) | none | Same model, free, data is not stored. Quick to try, but limited to 400 requests per day and 3,000 per month per API key, possibly too little for agent mode. |
+| 2 | **GWDG Chat AI** (Academic Cloud) | none | Same model, free, data is not stored. Tested: small tasks as good as Claude, a larger task only partly correct. Limited to 400 requests per day and 3,000 per month per API key; the three test tasks needed 48 requests. |
 | 3 | **Usage-based API** (OpenRouter) | about 10–20 $ per person and month (estimate) | Same model without limits, training can be excluded. Probably cheaper than the subscription, but the estimate is still uncertain. |
 | – | GitHub Copilot Student | none | Not recommended for agent mode: 200 AI credits per month, model chosen automatically. Not tested yet. |
 | – | Gemini CLI | – | Dropped: the free tier was replaced by Antigravity CLI in June 2026. |
 
-- **Quality:** Qwen3.6-35B-A3B is slightly below Claude Sonnet 4.5 from September 2025. The Claude models of our current subscription are newer, so we expect a noticeable drop in quality ([step 4](#4-comparison-of-the-options)).
-- **Laptops:** not suitable for agent mode; small models are at most an addition for simple questions ([Our resources](8-our-resources.md#summary)).
+- **Quality:** Qwen3.6-35B-A3B is slightly below Claude Sonnet 4.5 from September 2025 ([step 4](#4-comparison-of-the-options)). Our [test](#5-test-task) confirms a noticeable drop compared to Claude Sonnet 5.5: on the small task both were equally good, on the larger task Qwen ignored part of the requirements and opened unprotected endpoints that were not asked for. Its results have to be reviewed carefully.
+- **Laptops:** not suitable for agent mode. In our test, Gemma 4 12B on a MacBook M1 Pro needed 24 minutes for the small task and failed the other two. Local models are at most an addition for short questions in chat ([Our resources](8-our-resources.md#summary)).
 
 **Next steps:**
 
 1. Ask IOS whether and how we can use the server.
-2. Check whether HTWG accounts can log in to Academic Cloud, and test GWDG Chat AI with OpenCode on a real task.
+2. Test the usage-based API and GitHub Copilot Student with the same [test tasks](#5-test-task).
 3. Read the token usage of team members who program with [ccusage](https://github.com/ryoppippi/ccusage) to confirm the cost estimate in [step 4](#4-comparison-of-the-options).
-4. Test the chosen option briefly in practice before the whole team switches.
+4. Let the team work with GWDG Chat AI for a while, to see whether the quality and the request limit are enough in daily work.
 
 ## Approach
 
@@ -71,7 +71,7 @@ Open-weight models recommended by the community for local agentic coding *(Commu
 
 Whether our laptops and the possible HTWG server can run the reference model is examined in [Our resources](8-our-resources.md):
 
-- **Laptops:** not suitable for agent mode. The reference model needs about 25 GB with Q4_K_M and 64K context, the laptops have at most 16 GB. On the Macs, small models are enough for simple tasks ([Result for the laptops](8-our-resources.md#result-for-the-laptops)).
+- **Laptops:** not suitable for agent mode. The reference model needs about 25 GB with Q4_K_M and 64K context, the laptops have at most 16 GB. On the Macs, small models are at most enough for short questions in chat ([Result for the laptops](8-our-resources.md#result-for-the-laptops)); the [test](#5-test-task) confirms this.
 - **Server:** under the assumption of 2 × A100 40 GB, vLLM runs the reference model in FP8 with 64K context for the whole team ([Result for the server](8-our-resources.md#result-for-the-server)).
 
 ## 4. Comparison of the options
@@ -131,7 +131,68 @@ Sources, as of 4 November 2026:
 | Enough usage for 5–10 hours of agent mode per week | ✓ under our assumptions, see [Our resources](8-our-resources.md#reference-model-on-the-server) | unclear: an agent sends one request per step, the limit is 400 per day | ✓, limited only by costs | – 200 AI credits per month |
 | Our code is not used for training | ✓ | ✓ | ✓ with settings | ✓ only with opt-out |
 
+## 5. Test task
+
+Every option solves the same three tasks from the Teamable code. They cover the main uses from the [survey](7-requirements.md#survey): explaining code, debugging and writing code. Claude Code solves them as well, as the reference.
+
+| # | Task | Mode | Repository and commit |
+|---|---|---|---|
+| 1 | **Explain code:** the OAuth flow between Canvas and the backend, and why it fails for `fetch` calls from the frontend | chat, read only | `teamable-backend`, `183a36c` |
+| 2 | **Fix a bug:** `authenticate/route.ts` returns a plain object instead of a `Response` when parameters are missing; return HTTP 400 and add a Jest test | agent, small | `teamable-frontend`, `98ce1c8` |
+| 3 | **Implement a feature:** the missing endpoint `GET /api/v1/teamset-templates` for the page *Project sets*, with Django tests | agent, several files | `teamable-backend`, `183a36c` |
+
+The expected results are known: task 1 is described in [Backend: LMS integration](../../current-state/backend-lms-integration.md), the bug and the missing endpoint of tasks 2 and 3 in [Frontend: LMS integration](../../current-state/frontend-lms-integration.md).
+
+??? info "Prompts"
+    The prompts are given word for word, without further help.
+
+    1. Explain how the OAuth flow between Canvas and this backend works (see src/canvas_oauth/). Describe the steps from the first request to a stored token, and explain why the flow fails when the frontend calls the API with fetch. Do not change any files.
+    2. In src/app/(accounts)/authenticate/route.ts, the GET handler returns a plain object instead of a Response when the query parameters token or path are missing. Fix it so that it returns an HTTP 400 response. Add a Jest test for this case in the test/ folder and make sure `npx jest` passes.
+    3. The frontend page "Project sets" calls GET /api/v1/teamset-templates and expects a list of team set templates, each with id, name, teams (the team templates of the set), createdAt and updatedAt. This endpoint does not exist in the backend. Implement it using the existing TeamSetTemplate and TeamTemplate models, and add Django tests for it. The tests must pass with `cd src && ../venv/bin/python manage.py test`.
+
+**Procedure:**
+
+- Every run starts on the commit above, in its own branch or worktree, with a new session.
+- The prompt is given word for word. If we have to step in, this is noted.
+- If the agent asks for the frontend in task 3, the answer is: "The frontend code is not available in this repository. Use the fields described in the task: id, name, teams (the team templates of the set), createdAt and updatedAt."
+- Only test data, e.g. from `makefakeclass`; no real data of students from Moodle or Canvas.
+
+**Rating per task and option:**
+
+| Criterion | How it is measured |
+|---|---|
+| Result | done / partly / not done; do the tests pass? |
+| Code quality | 1–5, with a short reason |
+| Interventions | how often we had to correct or ask again |
+| Time | from the prompt to the finished result |
+| Usage | tokens and costs with [ccusage](https://github.com/ryoppippi/ccusage); for GWDG the number of requests, because of the limit of 400 per day |
+
+### Results
+
+| Option | Task 1 | Task 2 | Task 3 | Setup effort |
+|---|---|---|---|---|
+| Claude Code (reference) | done; quality 5/5; no interventions; 35 s; 5 requests, 209K input tokens (90 % from the cache) and 3K output tokens | done, tests pass; quality 5/5; no interventions; 20 s; 4 requests, 154K input tokens (90 % from the cache) and 1K output tokens | done, tests pass; quality 5/5; no interventions; 71 s; 9 requests, 407K input tokens (93 % from the cache) and 4K output tokens | none, in use |
+| GWDG Chat AI with OpenCode | done; quality 3/5; no interventions; 27 s; 6 requests, 80K input and 5K output tokens | done, tests pass; quality 4/5; no interventions; 19 s; 7 requests, 85K input and 3K output tokens | partly done, tests pass; quality 2/5; 1 question answered; 3 min 17 s; 35 requests, 807K input and 19K output tokens | low: API key as environment variable and `opencode.json`, see [Setup guide](10-setup-guide.md) |
+| Usage-based API with OpenCode | not tested yet | not tested yet | not tested yet | |
+| GitHub Copilot Student | not tested yet | not tested yet | not tested yet | |
+| Local: Gemma 4 12B on MacBook M1 Pro, 32K context | not done: stopped after 25 min without an answer; 5 steps, single steps took up to 12 min | done, tests pass; quality 4/5; no interventions; 24 min; 35 requests, 371K input and 8K output tokens; context compacted twice | not done: stopped after 25 min without any change; only read files, context compacted once | low: LM Studio and `opencode.json` |
+| HTWG server | not testable yet, no access | | | |
+
+Notes on the runs (4 November 2026), Claude Code with Claude Sonnet 5.5:
+
+- **Claude, task 1:** The explanation matches the code and our [documentation](../../current-state/backend-lms-integration.md): all steps from the missing token through the redirect to Canvas, the callback with the `state` check, to the stored token and the DRF token for the frontend. For `fetch`, it names the redirect to Canvas' login page that is blocked by CORS, the missing session cookie and the wrong final redirect, and proposes a fix. It also found a real bug: `oauth_callback` uses `create` on a one-to-one relation, so a second authorization fails. No files were changed.
+- **Claude, task 2:** The fix returns a plain-text `Response` with status 400. The test checks the three cases as separate tests and also that no cookie is set and no redirect happens. It mocks the Next.js functions, so no change to the Jest configuration was needed.
+- **Claude, task 3:** The endpoint returns exactly the requested fields, including `createdAt` and `updatedAt`, is read-only and loads the team templates in one query. It requires a login, like the other endpoints of the project, and also answers without a trailing slash, as the frontend calls it. The 5 tests cover the fields, the empty list, the login and the read-only access. It did not ask for the frontend. Note: the page *Project sets* currently calls the endpoint without a token, so it has to send one.
+- **GWDG, task 1:** The steps of the flow are described correctly and in detail, including the token refresh. The explanation for `fetch` stays general ("fetch cannot show the Canvas page") and does not name CORS. It contains two errors: the frontend authenticates with the DRF token, not with a session cookie, and `initiate_oauth_check` is described as broken for the first login, although the flow returns to it after the callback. It proposes no fix and did not find the bug in `oauth_callback`.
+- **GWDG, task 2:** The fix is correct and minimal (`Response.json(..., { status: 400 })`). To import the route in the test, the agent added the missing `@/` alias to the Jest configuration, which is sensible. Minor points: all three cases are in one test instead of three, and an unused import remains. GWDG reported no cached tokens, so every request sent the whole context again.
+- **GWDG, task 3:** The endpoint works and returns the team templates; the agent wrote 6 tests that pass. But it returns `created_at` and `updated_at` instead of the requested `createdAt` and `updatedAt`, and it registered three more endpoints that were not asked for (`teamsets`, `team-templates`, `teams`). As the project sets no permission classes, these allow anyone to create, change and delete data. The agent asked once where the frontend code is; the time includes about one minute until it was answered. It started a subagent to explore the code; the requests of both are counted. No rate limit was hit.
+
+- **Local, task 2:** The fix is the same as Claude's, and the three cases are separate tests. Minor points: one test name does not match its case, and the request is cast with `as any`. The run took 24 minutes instead of 20 seconds: OpenCode compacted the context twice, after the second compaction the agent ran many shell commands in a row, and one step took about 8 minutes. A broken control token (`<|channel>`) appeared once in the output. During the run, 15.25 of 16 GB were used, 11.7 GB of it by the model as wired memory, and macOS used 3.1 GB of swap. LM Studio had loaded the model with its default of 4 parallel slots.
+- **Local, task 1:** Stopped after 25 minutes without an answer. In this time, the agent ran one shell command and read four files; the shell command alone took 12 minutes, one read 8.5 minutes. 14.0 of 16 GB were used, 10.7 GB of it by the model, and macOS used 4.0 GB of swap, so parts of the memory had to be read from the SSD (see [Speed](6-hardware.md#speed)). The swap was already in use from the earlier runs; the Mac was not restarted between the tests.
+- **Local, task 3:** Stopped after 25 minutes without changing any file. The agent read nine files in six minutes, then the context of 32K was compacted, and the next step took ten minutes without a result. The model was loaded with one parallel slot; 15.5 of 16 GB were used, 13 GB of it by the model, with 2.7 GB of swap. Two earlier attempts are not counted: the first hung at the first step with 4 parallel slots, the second ended after one answer without a tool call while the first was still running in the background.
+
 ## Limits of this evaluation
 
-- Only local operation on one laptop was tested briefly (see [Practical test](8-our-resources.md#practical-test)). The server, GWDG Chat AI, the usage-based API and GitHub Copilot Student were not tested; for them, the evaluation relies on benchmarks reported by the developers, reports of users and calculations.
+- GWDG Chat AI, Claude Code and a local model were tested with three [test tasks](#5-test-task), each once and by one person. The server, the usage-based API and GitHub Copilot Student were not tested yet; for them, the evaluation relies on benchmarks reported by the developers, reports of users and calculations.
+- The local tests ran one after the other without restarting the Mac, so swap from earlier runs was still in use.
 - The tool around the model influences the result as much as the model itself (see [step 2](#2-a-capable-model)).

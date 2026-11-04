@@ -13,3 +13,4 @@ Research on cheaper alternatives for AI-assisted development in VS Code.
 - [Requirements](7-requirements.md)
 - [Our resources](8-our-resources.md)
 - [Evaluation](9-evaluation.md)
+- [Setup guide](10-setup-guide.md)
