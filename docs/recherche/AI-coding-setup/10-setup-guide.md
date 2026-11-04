@@ -45,7 +45,7 @@ Alternatively: `curl -fsSL https://opencode.ai/install | bash` on macOS and Linu
 
 ## 4. Configuration
 
-Create `opencode.json` in the root of the project. The file contains no secret, only the name of the environment variable, so it can be committed and shared with the team.
+Every team member creates `opencode.json` in the root of their project and does not commit it. The file contains no secret, only the name of the environment variable.
 
 ```json
 {
