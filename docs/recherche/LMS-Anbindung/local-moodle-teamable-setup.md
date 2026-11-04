@@ -293,3 +293,4 @@ Compared to `master`, the branch contains:
 - The **Canvas parameters** in Moodle are a bridge. A real implementation should use the LTI standard fields `sub` and `context.id`.
 - Every course is attached to the **first organization** (`Organization.objects.first()`). Multiple LMS instances at the same time are not supported.
 - All **error messages in the frontend** still refer to Canvas.
+
