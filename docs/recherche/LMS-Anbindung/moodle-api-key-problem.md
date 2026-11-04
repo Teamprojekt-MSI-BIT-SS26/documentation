@@ -30,6 +30,10 @@ Assessment: The admins will probably not allow this.
 
 The token box on the security keys page only appears if web services are enabled and the user has `createtoken`. Six services are listed there; the "Teamable" service could be the seventh.
 
+## Approach 3: CSV is not practical
+
+Groups can be created via CSV, but they contain no students. The students also cannot be assigned to the groups automatically via CSV.
+
 ## Students cannot create groups
 
 Tested in the local instance with a student and a Teamable token:
