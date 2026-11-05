@@ -39,25 +39,6 @@
 | Tests | Jest and Cypress are set up, each with one example test only |
 | Deployment | [Dockerfile](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/Dockerfile) (`yarn build` in the image) + [docker-compose.yml](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/docker-compose.yml) (port 8003 → 3000) |
 
-### Starting the frontend
-
-```bash
-nvm use               # Node 20.16.0
-cp sample.env .env
-yarn                  # install dependencies (missing in the README)
-yarn dev              # http://localhost:3000
-```
-
-The setup in the [README](https://github.com/Teamable-Analytics/teamable-frontend/blob/98ce1c8/README.md) needs a running `teamable-backend` on port 8000 and an instructor signup token for the first account. For setups without Canvas, see section 8 of [Frontend: LMS integration](frontend-lms-integration.md).
-
-All commands work at this commit with Node 20.16.0 and Yarn 1.22.22:
-
-| Command | Result |
-|---|---|
-| `yarn lint` | No warnings or errors |
-| `yarn tsc` | No errors |
-| `yarn test` | One example test, passes |
-| `yarn build` | Successful. The route list has the same 14 entries as the view table in [section 4](#4-views); the 404 page appears as `/_not-found` |
 
 ### Folder structure
 
