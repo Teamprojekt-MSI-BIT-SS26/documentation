@@ -2,13 +2,14 @@
 
 Applies to Moodle 4.5 (HTWG). Tests were done in a local Moodle instance, not at HTWG.
 
-## The three approaches
+## The four approaches
 
 | # | Approach | Token's permissions | Token needed |
 |---|---|---|---|
 | 1 | Service token (technical user) | All courses | yes, once in the backend |
 | 2 | Personal token (teacher) | Only the teacher's courses | yes, per teacher |
 | 3 | CSV export | - | no |
+| 4 | `login/token.php` | Only the teacher's courses | yes, requested with the teacher's Moodle password |
 
 
 ## Approach 1: The technical user has permissions across all of Moodle
@@ -33,6 +34,10 @@ The token box on the security keys page only appears if web services are enabled
 ## Approach 3: CSV is not practical
 
 Groups can be created via CSV, but they contain no students. The students also cannot be assigned to the groups automatically via CSV.
+
+## Approach 4: `login/token.php` is not an option
+
+It issues a token only in exchange for the user's Moodle username and password. Teamable would have to collect and handle the Moodle password, so the token has to be copied manually instead.
 
 ## Students cannot create groups
 
