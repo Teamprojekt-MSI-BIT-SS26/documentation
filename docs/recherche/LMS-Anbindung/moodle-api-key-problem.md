@@ -35,9 +35,13 @@ The token box on the security keys page only appears if web services are enabled
 
 Groups can be created via CSV, but they contain no students. The students also cannot be assigned to the groups automatically via CSV.
 
-## Approach 4: `login/token.php` is not an option
+## Approach 4: `login/token.php` works, but needs the Moodle password
 
-It issues a token only in exchange for the user's Moodle username and password. Teamable would have to collect and handle the Moodle password, so the token has to be copied manually instead.
+It issues a token only in exchange for the user's Moodle username and password. Teamable would have to collect and handle the Moodle password, which is why the token is copied manually in Approach 2 instead.
+
+Test at HTWG (own account, `service=moodle_mobile_app`): `https://moodle.htwg-konstanz.de/moodle/login/token.php` is reachable (the path without `/moodle` returns 404). The attempt returned a `token` and a `privatetoken`. So the endpoint works at HTWG with the normal Moodle credentials.
+
+Not yet tested: whether a token for `moodle_mobile_app` can call the group functions. That service only contains a fixed set of functions, so a "Teamable" service would probably still be needed.
 
 ## Students cannot create groups
 
