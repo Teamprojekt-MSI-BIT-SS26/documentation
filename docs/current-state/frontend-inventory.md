@@ -1,6 +1,6 @@
 # Frontend: Code inventory
 
-> **Purpose:** This page maps the current state of `teamable-frontend`: project structure, key files, data flows and all existing views. It is the starting point for the upcoming implementation in Epic 2 (Automate Team Generation). It describes the code as it is and does not evaluate it. The full folder tree, the configuration files, the conventions, the detailed key file descriptions and the complete list of known gaps are in [Frontend: Code inventory details](frontend-inventory-details.md).
+> **Purpose:** This page maps the current state of `teamable-frontend`: project structure, key files, data flows and all existing views. It describes the code as it is and does not evaluate it. The full folder tree, the configuration files, the conventions, the detailed key file descriptions and the complete list of known gaps are in [Frontend: Code inventory details](frontend-inventory-details.md).
 >
 > **Version:** `teamable-frontend` @ [`98ce1c8`](https://github.com/Teamable-Analytics/teamable-frontend/tree/98ce1c8), `teamable-backend` @ [`183a36c`](https://github.com/Teamable-Analytics/teamable-backend/tree/183a36c) (as of 2026-10-29). Paths are relative to `teamable-frontend/` unless stated otherwise.
 >
