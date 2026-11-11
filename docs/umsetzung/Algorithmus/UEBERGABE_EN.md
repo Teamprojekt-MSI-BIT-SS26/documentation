@@ -195,16 +195,16 @@ The template is `env/local_run.env.example`; copy it to `env/local_run.env`.
 The algorithm does not need Canvas credentials (e.g. a Canvas API token). They belong in the
 backend that fetches the data from Canvas, and there too in environment variables.
 
-### Security notes from the analysis (still open)
+### Security notes from the analysis
 
-These points concern API mode, not the local run. They were not changed as part of this task:
+These points concern API mode, not the local run. Points 1 and 3 are fixed by the
+[backend integration](../Backend-Integration/INTEGRATION_EN.md):
 
-1. **The API key middleware checks the key only after processing.** In
-   `algorithms/api/middlewares/api_key_authentication.py`, `get_response(request)` is called
-   before the key check. Requests with an invalid key therefore still run the algorithm and write
-   a log entry. Only the response is discarded afterwards.
-2. **The dev settings contain hard-coded values.** `algorithms/api/settings/__init__.py` sets
-   `SECRET_KEY` directly in the code, `DEBUG = True` and `ALLOWED_HOSTS = ["*"]`. For production,
-   `settings/prod.py` must be used.
-3. **`utils/api_auth.py` looks for an `env/.env*` file on import.** If it is missing, the import
-   fails with `StopIteration`.
+1. **The API key middleware checks the key only after processing.** **Fixed:** the key is now
+   checked before the view. Without configured keys, every request is rejected.
+2. **The dev settings contain hard-coded values (still open).**
+   `algorithms/api/settings/__init__.py` sets `DEBUG = True` and `ALLOWED_HOSTS = ["*"]`.
+   `SECRET_KEY` now comes from `DJANGO_SECRET_KEY` in `env/.env`, with a fixed value as fallback.
+   For production, `settings/prod.py` must be used.
+3. **`utils/api_auth.py` looks for an `env/.env*` file on import.** **Fixed:** the settings load
+   `env/.env` or `env/.env.prod` explicitly, `utils/api_auth.py` no longer loads a file.
