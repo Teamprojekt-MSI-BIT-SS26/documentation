@@ -10,4 +10,4 @@ Ergebnisse aus der Umsetzungsphase.
 
 ## Deployment
 
-- [Backend on the HTWG server](Deployment/backend-htwg-server.md)
+- [Backend on the HTWG VM](Deployment/backend-htwg-vm.md)
