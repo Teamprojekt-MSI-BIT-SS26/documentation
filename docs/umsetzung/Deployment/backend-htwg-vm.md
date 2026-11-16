@@ -1,271 +1,94 @@
-# Deployment: Backend on the HTWG VM
+# Dev instance on the HTWG VM
 
 !!! info "What this is about"
-    This guide describes how the Teamable backend is run permanently on a VM of the HTWG computing center (Rechenzentrum, RZ): reachable via HTTPS under a fixed address, with a health check, an automatic restart after a reboot and without secrets in the repository.
+    This guide sets up a **development VM** of the HTWG computing center (Rechenzentrum, RZ). It runs the [dev stack](dev-stack.md): Teamable frontend, Teamable backend and an own Moodle 4.5 with test data, reachable via HTTPS under two fixed host names, only through the HTWG VPN.
 
-    **Scope:** The VM will host two environments: **production** (frontend and backend for the HTWG Moodle) and **staging** (frontend, backend and an own Moodle 4.5 with test data). This guide sets up the **production backend** and prepares everything so that the frontend and the staging environment can be added without changes (section 13). The RZ request in section 2 already covers the whole target architecture, because processing times at the RZ are long.
+    The VM is used to test the LTI launch and the student import on a server, to show Teamable to others and to try out Moodle versions (e.g. 5.3 for the RZ). It holds **test data only**. Running Teamable for the HTWG Moodle with real student data is a later step (section 11).
 
-    **Not the GPU server:** The backend does **not** run on the GPU cluster of the Institute for Optical Systems (8 × A100), which hosts the AI model (see the guide "AI Model Deployment on the HTWG Server"). The backend currently does not depend on the GPU server: team generation runs inside the backend (`src/app/services/team_generation.py` does not call any external API). If this changes, outgoing traffic from the VM to the GPU server has to be added to the RZ request.
+    **Code:** [`teamable-dev-stack`](https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-dev-stack), plus checkouts of [`teamable-backend`](https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-backend) and [`teamable-frontend`](https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-frontend).
 
-    **Code:** [`teamable-backend`](https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-backend). Paths without a prefix refer to this repository.
+    **Assumptions:** Debian 13 on the VM, Docker Engine with the Compose plugin. Values in angle brackets such as `<teamable-host>` are placeholders.
 
-    **Assumptions:** Debian 13 (Linux) on the HTWG VM, Docker Engine with the Compose plugin. Values in angle brackets such as `<prod-host>` are placeholders and have to be replaced.
+    The earlier, detailed plan for production and staging is kept as [Production plan (draft)](production-plan.md).
 
 ---
 
-## 1. Target architecture
+## Prerequisite: Docker
 
-Each environment has **one origin** (one host name). The host nginx sends the backend paths to the backend and everything else to the frontend. Frontend and backend are therefore on the same origin: no CORS, one certificate per environment, and the redirect from the backend to the frontend after the LTI launch stays on the same host.
+The stack needs **Docker Engine with the Compose plugin** (Compose 2.17 or newer, because of `dockerfile_inline`). Install it from the official Docker repository as described in the Docker documentation:
+
+- [Install Docker Engine on Debian](https://docs.docker.com/engine/install/debian/), method "Install using the `apt` repository"
+- [Linux post-installation steps](https://docs.docker.com/engine/install/linux-postinstall/) (start on boot, use Docker without `sudo`)
+
+Do not use the packages `docker.io`/`docker-compose` from Debian: they are older and come without the Compose plugin in the required version. Check the installation:
+
+```bash
+docker --version
+docker compose version     # v2.17 or newer
+sudo docker run --rm hello-world
+```
+
+Section 3 contains the settings for the VM that come on top of the installation (log size, group `docker`).
+
+---
+
+## 1. Overview
 
 ```mermaid
 flowchart LR
-    Browser((Browser)) -->|HTTPS :443| HN
-    Moodle["HTWG Moodle"] -->|LTI launch, HTTPS :443| HN
+    Browser((Browser<br/>VPN)) -->|HTTPS :443| HN
 
-    subgraph VM["HTWG VM"]
-        HN["nginx on the host<br/>TLS termination<br/>routing by host name and path"]
+    subgraph VM["HTWG development VM"]
+        HN["nginx on the host<br/>TLS for both host names"]
 
-        subgraph PROD["compose project teamable-prod (&lt;prod-host&gt;)"]
-            PFE["frontend<br/>127.0.0.1:8003<br/>(separate task)"]
-            PNG["nginx container<br/>127.0.0.1:8002<br/>serves /static/"]
-            PWEB["web<br/>gunicorn + Django"]
-            PDB[("db<br/>Postgres")]
-            PNG --> PWEB --> PDB
+        subgraph STACK["Compose project teamable-dev"]
+            GW["gateway<br/>127.0.0.1:8080"]
+            WEB["web<br/>backend"]
+            DB[("db<br/>Postgres")]
+            FE["frontend"]
+            MO["moodle<br/>127.0.0.1:8008"]
+            MDB[("moodle-db<br/>MariaDB")]
+            GW --> WEB --> DB
+            GW --> FE
+            MO --> MDB
         end
 
-        subgraph STG["compose projects for staging (&lt;staging-host&gt;, &lt;moodle-dev-host&gt;)"]
-            SFE["frontend :8013"]
-            SBE["backend :8012"]
-            SMO["Moodle 4.5 :8018"]
-        end
-
-        HN -->|"/api/ /admin/ /lti/ /oauth/ /static/ /health/"| PNG
-        HN -->|"everything else"| PFE
-        HN -.-> SFE
-        HN -.-> SBE
-        HN -.-> SMO
+        HN -->|"&lt;teamable-host&gt;"| GW
+        HN -->|"&lt;moodle-host&gt;"| MO
     end
 ```
 
-### Host names
+| | Address |
+|---|---|
+| Teamable | `https://<teamable-host>` |
+| Moodle | `https://<moodle-host>` |
 
-| Environment | Host name (example) | Placeholder |
-|---|---|---|
-| Production | `teamable.<subdomain>.htwg-konstanz.de` | `<prod-host>` |
-| Staging | `teamable-dev.<subdomain>.htwg-konstanz.de` | `<staging-host>` |
-| Staging Moodle | `moodle-dev.<subdomain>.htwg-konstanz.de` | `<moodle-dev-host>` |
-
-### Path routing
-
-| Path | Goes to | Why |
-|---|---|---|
-| `/api/`, `/admin/`, `/lti/`, `/oauth/`, `/static/`, `/health/` | backend (container nginx) | all routes of `src/teamable/urls.py`, the Django static files and the health check |
-| everything else (`/`, `/course/…`, `/accounts/…`, `/authenticate`, `/_next/…`) | frontend | Next.js pages and assets |
-
-The frontend has no routes that start with one of the backend prefixes (see [Frontend inventory](../../current-state/frontend-inventory.md)). New routes in either project must keep it that way.
-
-### Ports and directories
-
-Each environment is a separate Compose project with its own containers, networks, database, secrets and checkout. The containers only listen on `127.0.0.1`; only the host nginx is reachable from outside.
-
-| | Production | Staging |
-|---|---|---|
-| Compose project name | `teamable-prod` | `teamable-staging` |
-| Checkout | `/opt/teamable/prod/backend` | `/opt/teamable/staging/backend` |
-| Backend (container nginx) | `127.0.0.1:8002` | `127.0.0.1:8012` |
-| Frontend | `127.0.0.1:8003` | `127.0.0.1:8013` |
-| Moodle | – | `127.0.0.1:8018` |
-| Backups | `/var/backups/teamable/prod` | not needed (test data only) |
-
-### Notes on the existing container setup
-
-- `docker-compose.yml` starts `nginx`, `web` (gunicorn, `scripts/runserver.sh` runs `collectstatic` and `migrate` on every start) and `db` (Postgres).
-- TLS is **not** handled by the containers. The host nginx terminates HTTPS.
-- The container nginx forwards the header `X-Forwarded-Proto` unchanged (`config/nginx.conf`). Django uses it to detect HTTPS (`SECURE_PROXY_SSL_HEADER` in `src/teamable/settings.py`). The host nginx therefore **must** set it to `https`, otherwise CSRF checks, redirects and LTI launches fail.
+The host nginx terminates TLS and forwards each host name to its container port. Only the host nginx is reachable from outside. Everything else is the same as locally, including the path routing in the [gateway](dev-stack.md#the-gateway).
 
 ---
 
 ## 2. Request from the RZ
 
-Clarify the open decision below first, then request everything at once:
-
-| What | Details |
+| What | Value |
 |---|---|
-| **VM** | Preferred: **two VMs**, so that experiments in staging cannot affect production with real student data. Production: 2 vCPU, 4 GB RAM, 40 GB disk. Staging (incl. Moodle): 2 vCPU, 6 GB RAM, 40 GB disk. Fallback: **one VM** with 4 vCPU, 8 GB RAM, 60 GB disk. Debian 13, SSH access for the team members (public keys), `sudo` rights. |
-| **DNS entries** | `<prod-host>`, `<staging-host>`, `<moodle-dev-host>` (section 1) |
-| **Firewall** | Incoming TCP **443** (HTTPS) and **80** (redirect, and Let's Encrypt if used). Reachability: see the open decision below. |
-| **Outgoing traffic** | HTTPS to the HTWG Moodle (LTI token requests, NRPS), to Docker Hub, PyPI and the npm registry (image builds) and to GitHub (clone). The VM must also reach its own host names (staging backend → staging Moodle, server-side requests of the frontend). |
-| **TLS certificate** | For all three host names. Ask whether the RZ issues server certificates (e.g. via GÉANT TCS) or whether Let's Encrypt is allowed. Let's Encrypt only works if port 80 is reachable from the internet. |
-| **Backup storage** | A place outside the VM for the database dumps of production (section 10), e.g. a network share or the RZ backup system. |
-
-The rest of this guide works the same with one or two VMs. With two VMs, the staging environment simply uses the second VM.
-
-!!! warning "Open decision: who must reach Teamable?"
-    The frontend calls the API **from the user's browser**. If the VM is only reachable from the campus network/VPN, Teamable does not work for teachers who open it from Moodle at home without VPN, although Moodle itself is reachable from the internet. The team has to decide for production between:
-
-    - **Internet:** Teamable works everywhere like Moodle. The backend is publicly exposed, so the hardening in section 3 is mandatory.
-    - **Campus network/VPN only:** smaller attack surface, but users need the VPN. Let's Encrypt is then not possible (certificate from the RZ, option B in section 6.2).
-
-    Staging, and especially the staging Moodle, only needs to be reachable from the campus network/VPN.
-
-    Independent of this decision, the **backend** calls Moodle directly for the student import (`/mod/lti/token.php`, NRPS). The VM must be allowed to reach the Moodle server.
+| **DNS** | `<teamable-host>` and `<moodle-host>`, e.g. `teamable-dev.in.htwg-konstanz.de` and `moodle-dev.in.htwg-konstanz.de` (not fixed yet) |
+| **Firewall** | 443 (HTTPS), 80 (HTTP, redirects to HTTPS), 22 (SSH) |
+| **TLS certificate** | One certificate from the RZ for both host names (section 5.1) |
 
 ---
 
-## 3. Required changes in `teamable-backend` before the first deployment
-
-The current state of the repository (`master`) does not meet the acceptance criteria. These changes belong in the backend repository (separate PRs), not on the server. Deploy a **tag** that contains all of them.
-
-### 3.1 Moodle support on `master`
-
-On `master`, the LTI launch only supports Canvas: `src/lti/views.py` requires the custom claims `canvas_course_id`/`canvas_user_id` and then starts the Canvas OAuth flow (`canvas-oauth-initiate`). A launch from Moodle fails with `Missing canvas_course_id/canvas_user_id custom claims`.
-
-The Moodle support (LTI launch with standard claims, student import via NRPS) only exists on unmerged branches:
-
-- `52-technical-task-33-moodle-module-lti-standard-fields-integration-in-backend`
-- `local-backend-instance-moodle-lti`
-- `local-moodle-lti-nrps-import`
-
-These branches overlap and contain conflicting migrations (`0009_*`). Choose one, merge it into `master` with a single, linear migration history and create a tag for the deployment. Migrations must not be renumbered after the first production deployment.
-
-### 3.2 `SECRET_KEY` from the environment
-
-`src/teamable/settings.py` contains a hard-coded `SECRET_KEY`. It is used for sessions, CSRF and the sign-up JWTs (`CourseMember.create_jwt_token`). Everyone who knows the repository can forge them.
-
-Replace the line and place it **after** the definition of `DEBUG`, because it uses `DEBUG`:
-
-```python
-# src/teamable/settings.py
-DEBUG = os.environ.get("DEBUG", "FALSE") == "TRUE"
-
-SECRET_KEY = os.environ.get("SECRET_KEY") or (
-    "django-insecure-local-only" if DEBUG else None
-)
-if not SECRET_KEY:
-    raise RuntimeError("SECRET_KEY must be set when DEBUG is not TRUE")
-```
-
-### 3.3 Remove credentials from the repository
-
-`src/app/services/team_generation.py` contains a commented-out request to the UBC team generation API with an `X-Api-Key`. Remove the key from the code. It stays in the Git history, so it has to be considered public; inform the owner of the UBC API if the key is still valid.
-
-`db.env` is committed and contains the Postgres password (`YourPasswordHere1234`). `.gitignore` only covers `.env*`, not `db.env`.
-
-```bash
-git mv db.env db.env.sample
-echo "db.env" >> .gitignore
-```
-
-The password stays in the Git history. Therefore use a new, random password on the server (section 5.2). The old password is public and must not be used.
-
-### 3.4 Health check endpoint
-
-There is no health endpoint yet. A minimal one that also checks the database connection:
-
-```python
-# src/teamable/urls.py
-from django.db import connection
-from django.http import JsonResponse
-
-
-def health(request):
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT 1")
-    return JsonResponse({"status": "ok"})
-
-
-urlpatterns = [
-    path("health/", health),
-    # ... existing entries
-]
-```
-
-If the database is not reachable, the view raises an exception and Django answers with `500`. This is enough for a simple monitoring check.
-
-### 3.5 Cookie security
-
-- Session and CSRF cookies are also sent over HTTP. In the `else` branch of `if DEBUG:` (production), add:
-
-    ```python
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    ```
-
-- Check the production settings with `python manage.py check --deploy` (section 7). Warnings about `SECURE_SSL_REDIRECT` and `SECURE_HSTS_SECONDS` can be ignored, because the host nginx redirects to HTTPS and sets HSTS (section 6.3).
-
-CORS settings are not needed: frontend and backend share one origin (section 1).
-
-### 3.6 Harden the container setup and allow several environments
-
-`docker-compose.yml` has several problems for a server that runs permanently:
-
-- `web` and `db` run with `privileged: true`. A privileged container has almost full access to the host, so a vulnerability in Django or Postgres means control over the VM. Neither service needs it.
-- Port `8002` is published on all interfaces and therefore reachable from outside, past the host nginx. Docker writes its own firewall rules and bypasses `ufw`.
-- The port is fixed, so a second environment on the same VM cannot start.
-- `web` uses the fixed image name `teamable:latest`. Production and staging would overwrite each other's image: after a staging build, a `docker compose up -d` in production would start the staging code.
-- `nginx:latest` and `postgres:latest` are not pinned. With `postgres:latest`, a `docker compose pull` can switch to a new major version that cannot read the existing data directory.
-- The `Dockerfile` copies `src/` into the image, including `src/lti/config/` with the LTI private key. There is no `.dockerignore`.
-
-Changes:
-
-```yaml
-# docker-compose.yml
-services:
-    nginx:
-        image: nginx:1.28
-        ports:
-            - 127.0.0.1:${BACKEND_PORT:-8002}:8000
-    web:
-        build: .
-        # remove "image: teamable:latest": Compose then names the image
-        # after the project, e.g. teamable-prod-web
-        # remove "privileged: true"
-        volumes:
-            - ./staticfiles:/code/staticfiles
-            - ./src/lti/config:/code/lti/config:ro
-    db:
-        image: postgres:17
-        # remove "privileged: true"
-```
-
-```text
-# .dockerignore
-src/lti/config/
-src/db.sqlite3
-src/debug.log
-.env*
-db.env
-srv/
-logs/
-staticfiles/
-```
-
-```text
-# add to .gitignore (server-specific settings, see section 13)
-docker-compose.override.yml
-```
-
-The project name and the port come from the `.env` of each checkout (section 5.1). The LTI configuration is mounted read-only at runtime and is no longer part of the image. Any fixed major version of Postgres works; it can only be changed later with a dump and restore.
-
-!!! note "Python version"
-    The `Dockerfile` uses `python:3.10.12`. Python 3.10 has been end of life since October 2026 and gets no more security fixes. Updating to a supported version (e.g. `python:3.13-slim`) is a separate change that needs a test of all dependencies.
-
----
-
-## 4. Prepare the VM
+## 3. Prepare the VM
 
 All commands run on the VM via SSH.
 
 ```bash
 sudo apt-get update && sudo apt-get upgrade -y
-sudo apt-get install -y ca-certificates curl git nginx
+sudo apt-get install -y ca-certificates curl git nginx openssl
+```
 
-# Docker Engine + Compose plugin from the official Docker repository
-curl -fsSL https://get.docker.com -o get-docker.sh
-less get-docker.sh                 # check the script before running it as root
-sudo sh get-docker.sh
+Install Docker as described in the [prerequisites](#prerequisite-docker), then start it on boot:
 
-# Start Docker on boot (needed for the auto-restart)
+```bash
 sudo systemctl enable --now docker
 ```
 
@@ -279,461 +102,341 @@ sudo tee /etc/docker/daemon.json > /dev/null <<'EOF'
 }
 EOF
 sudo systemctl restart docker
-```
-
-Allow your own user to run docker without `sudo` (log in again afterwards):
-
-```bash
-sudo usermod -aG docker "$USER"
+sudo usermod -aG docker "$USER"    # log in again afterwards
 ```
 
 !!! warning
-    Members of the group `docker` can start containers with access to the whole file system and are therefore effectively root on the VM. Only add team members who also have `sudo` rights.
+    Members of the group `docker` are effectively root on the VM. Only add team members who also have `sudo` rights.
 
-Check out the code into the directory of the environment (section 1):
+`teamable-dev-stack` is private (backend and frontend are public). The VM gets read-only access to it via a **deploy key**. SSH goes over port 443 (`ssh.github.com`), so no outgoing port 22 is needed.
 
 ```bash
-sudo mkdir -p /opt/teamable/prod
-sudo chown -R "$USER":"$USER" /opt/teamable
-git clone https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-backend.git /opt/teamable/prod/backend
-cd /opt/teamable/prod/backend
-git checkout <tag>
+ssh-keygen -t ed25519 -N "" -C "htwg-vm teamable-dev-stack" -f ~/.ssh/deploy_teamable-dev-stack
+cat ~/.ssh/deploy_teamable-dev-stack.pub
 ```
 
-!!! danger "The database lives inside the checkout"
-    Postgres stores its data in `srv/postgres-data/` inside the checkout (ignored by Git). `git clean -fdx` or deleting the checkout **deletes the database**. Never run `git clean` with `-x` here.
+Add the public key on GitHub in `teamable-dev-stack`: *Settings → Deploy keys → Add deploy key*, without "Allow write access" (needs admin rights on the repository). Then add a host alias to `~/.ssh/config`:
+
+```text
+Host github-teamable-dev-stack
+    HostName ssh.github.com
+    Port 443
+    User git
+    IdentityFile ~/.ssh/deploy_teamable-dev-stack
+    IdentitiesOnly yes
+```
+
+```bash
+chmod 600 ~/.ssh/config
+ssh -T github-teamable-dev-stack     # "Hi Teamprojekt-MSI-BIT-SS26/teamable-dev-stack! You've successfully authenticated..."
+```
+
+Clone the stack and the two application repositories:
+
+```bash
+sudo mkdir -p /opt/teamable
+sudo chown "$USER":"$USER" /opt/teamable
+git clone github-teamable-dev-stack:Teamprojekt-MSI-BIT-SS26/teamable-dev-stack.git /opt/teamable/teamable-dev-stack
+
+cd /opt/teamable/teamable-dev-stack
+git clone -b local-moodle-lti-nrps-import https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-backend.git
+git clone https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-frontend.git
+```
+
+For the backend branch, see [dev stack](dev-stack.md), section 3.
 
 ---
 
-## 5. Secrets and configuration (only on the server)
-
-All secrets live **only** in files on the VM that are listed in `.gitignore`. They are never committed. Each file gets the permissions `600`.
-
-### 5.1 `.env`
+## 4. `.env` for the VM
 
 ```bash
-cd /opt/teamable/prod/backend
-cp sample.env .env
+cd /opt/teamable/teamable-dev-stack
+cp .env.example .env
 chmod 600 .env
 ```
 
-Content for production:
+Change these values compared to `.env.example`:
 
 ```bash
-# Read by Docker Compose: project name and port (section 1)
-COMPOSE_PROJECT_NAME=teamable-prod
-BACKEND_PORT=8002
+COMPOSE_PROJECT_NAME=teamable-dev
 
+# --- Addresses ---
+TEAMABLE_HOST=<teamable-host>
+TEAMABLE_URL=https://<teamable-host>
+MOODLE_HOST=<moodle-host>
+MOODLE_URL=https://<moodle-host>
+MOODLE_SSLPROXY=true
+
+# --- Backend ---
 DEBUG=FALSE
-SERVER_NAME=<prod-host>
-SECRET_KEY=<random value, see below>
+SECRET_KEY=<random>
 
-# LTI config (folder is mounted into the container, see 5.3)
-LTI_CONF_FOLDER=lti/config
-LTI_CONF_FILE_NAME=lti_config_settings.json
-
-# Canvas is not used, but settings.py reads the variables
-CANVAS_BASE_URL=
-CANVAS_OAUTH_CLIENT_ID=
-CANVAS_OAUTH_CLIENT_SECRET=
-
-# Same origin as the backend (section 1)
-FRONTEND_BASE_URL=https://<prod-host>
+# --- Passwords ---
+POSTGRES_PASSWORD=<random>
+MOODLE_DB_ROOT_PASSWORD=<random>
+MOODLE_DB_PASSWORD=<random>
 ```
 
-- Docker Compose reads `COMPOSE_PROJECT_NAME` and `BACKEND_PORT` from the `.env` in the project directory. Every `docker compose` command in this checkout therefore uses the right project, without `-p`. Both checkouts are called `backend`; without `COMPOSE_PROJECT_NAME`, production and staging would be the same Compose project.
-- `DEBUG=FALSE` switches to Postgres, checks the LTI deployment ID and makes `SERVER_NAME` mandatory. `SERVER_NAME` fills `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` (as `https://<prod-host>`).
-- `LOCAL_DB`, `TEAM_GENERATION_API_URL` and `TEAM_GENERATION_API_KEY` from `sample.env` are not read by the code and can be removed.
-- Generate `SECRET_KEY`:
-
-    ```bash
-    python3 -c "import secrets; print(secrets.token_urlsafe(50))"
-    ```
-
-### 5.2 `db.env`
+Replace each `<random>` with its own value:
 
 ```bash
-cp db.env.sample db.env
-chmod 600 db.env
+openssl rand -hex 32
 ```
 
-```bash
-POSTGRES_HOST=db
-POSTGRES_PORT=5432
-POSTGRES_DB=teamable
-POSTGRES_USER=teamable
-POSTGRES_PASSWORD=<random value: openssl rand -base64 32>
-```
-
-!!! warning
-    Postgres only reads `POSTGRES_USER`/`POSTGRES_PASSWORD` when the data directory (`srv/postgres-data/`) is created for the first time. If the password is changed later, it has to be changed in the database as well (`ALTER USER ...`).
-
-### 5.3 LTI configuration and key pair
-
-The folder `src/lti/config/` is in `.gitignore`. Create the key pair and `lti_config_settings.json` there as described in [Local setup: Moodle + Teamable](../../recherche/LMS-Anbindung/local-moodle-teamable-setup.md), with the values of the HTWG Moodle instead of `localhost:8008`:
-
-- Top-level key = **Platform ID** of the HTWG Moodle (exactly, without a trailing `/`)
-- `auth_login_url`, `auth_token_url`, `key_set_url` point to the HTWG Moodle
-- `client_id` and `deployment_ids` from the tool registration in Moodle
-- In Moodle, register the tool with `https://<prod-host>/lti/login/` (initiate login) and `https://<prod-host>/lti/launch/` (redirect URI / tool URL)
-
-Use a **separate key pair** for each environment.
-
-```bash
-chmod 700 src/lti/config
-chmod 600 src/lti/config/private.key
-```
-
-The folder is mounted read-only into the `web` container (change 3.6). After changing the LTI configuration, a restart is enough: `docker compose restart web`.
-
-### 5.4 Check that no secrets are tracked
-
-```bash
-git status --ignored --short | grep -E "\.env|db\.env|lti/config"   # must show "!!" (ignored)
-git ls-files | grep -E "(^|/)(\.env|db\.env)$|lti/config"             # must print nothing
-```
+- **URLs** without a trailing `/`. `MOODLE_URL` is also the LTI Platform ID; changing it later means a new Moodle installation or a changed `wwwroot`, a new tool registration and a new `lti_config_settings.json`.
+- **`MOODLE_SSLPROXY=true`:** Moodle only sees HTTP from the host nginx and would otherwise build `http://` links and redirect in a loop.
+- **`DEBUG=FALSE`:** Postgres instead of SQLite (data survives a rebuild), only `TEAMABLE_HOST` allowed, deployment ID checked. Django detects HTTPS via `X-Forwarded-Proto`, which the host nginx sets and the gateway passes on.
+- **`SECRET_KEY`:** the backend still has a hard-coded key in `settings.py` and does not read the variable yet (section 11). Set it anyway, so that nothing has to change once it does.
+- **Passwords:** Postgres and MariaDB only read them when their volume is created for the first time. Changing them later also needs a change in the database.
 
 ---
 
-## 6. HTTPS with nginx on the host
+## 5. TLS and host nginx
 
-On Debian, nginx sites are placed in `/etc/nginx/sites-available/` and enabled via symlinks in `/etc/nginx/sites-enabled/`. Each environment gets its own site. The order matters: the HTTP site has to exist before a certificate can be requested, and the HTTPS site can only be enabled once the certificate exists.
+### 5.1 Certificate from the RZ
 
-### 6.1 HTTP site
-
-`/etc/nginx/sites-available/teamable-prod`:
-
-```nginx
-server {
-    listen 80;
-    server_name <prod-host>;
-    return 301 https://$host$request_uri;
-}
-```
+Create a private key and a CSR for both host names on the VM and send only the CSR to the RZ:
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/teamable-prod /etc/nginx/sites-enabled/
-sudo rm /etc/nginx/sites-enabled/default
+sudo mkdir -p /etc/ssl/teamable && cd /etc/ssl/teamable
+sudo openssl req -new -newkey rsa:3072 -nodes \
+  -keyout teamable-dev.key -out teamable-dev.csr \
+  -subj "/CN=<teamable-host>" \
+  -addext "subjectAltName=DNS:<teamable-host>,DNS:<moodle-host>"
+sudo chmod 600 teamable-dev.key
+```
+
+Store the returned certificate **including the intermediate chain** as `/etc/ssl/teamable/teamable-dev.fullchain.pem`. Note the expiry date: renewal is manual (new CSR or the same one, depending on the RZ).
+
+The private key never leaves the VM and never goes into a repository.
+
+### 5.2 nginx sites
+
+The templates are in `teamable-dev-stack`. Copy them and set the two host names in the first lines; `sed` then replaces the placeholders `<teamable-host>` and `<moodle-host>` in the copy:
+
+```bash
+TEAMABLE_HOST=teamable-dev.in.htwg-konstanz.de   # your host names (section 2)
+MOODLE_HOST=moodle-dev.in.htwg-konstanz.de
+
+cd /opt/teamable/teamable-dev-stack
+sudo cp teamable-proxy.conf /etc/nginx/snippets/teamable-proxy.conf
+sudo cp host-nginx.conf /etc/nginx/sites-available/teamable-dev
+sudo sed -i "s/<teamable-host>/$TEAMABLE_HOST/g; s/<moodle-host>/$MOODLE_HOST/g" \
+  /etc/nginx/sites-available/teamable-dev
+
+sudo ln -s /etc/nginx/sites-available/teamable-dev /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl reload nginx
 sudo systemctl enable nginx
 ```
 
-### 6.2 Get a certificate
+`host-nginx.conf` redirects HTTP to HTTPS and has one HTTPS server per host name with the same certificate: `<teamable-host>` → `127.0.0.1:8080`, `<moodle-host>` → `127.0.0.1:8008`. The snippet sets `Host` and `X-Forwarded-Proto https`. `nginx -t` fails with `cannot load certificate` until the certificate from 5.1 exists.
 
-=== "Option A: Let's Encrypt"
-
-    Only if port 80 is reachable from the internet.
-
-    ```bash
-    sudo apt-get install -y certbot python3-certbot-nginx
-    sudo certbot certonly --nginx -d <prod-host> \
-      --deploy-hook "systemctl reload nginx"
-    ```
-
-    `certonly` only fetches the certificate and does not change the nginx configuration. The certificate is stored in `/etc/letsencrypt/live/<prod-host>/`. Certbot installs a systemd timer that renews it automatically and reloads nginx afterwards. Check it with:
-
-    ```bash
-    systemctl list-timers | grep certbot
-    sudo certbot renew --dry-run
-    ```
-
-=== "Option B: Certificate from the RZ"
-
-    Create a private key and a certificate signing request (CSR) on the VM and send only the CSR to the RZ:
-
-    ```bash
-    sudo mkdir -p /etc/ssl/teamable && cd /etc/ssl/teamable
-    sudo openssl req -new -newkey rsa:3072 -nodes \
-      -keyout <prod-host>.key -out <prod-host>.csr \
-      -subj "/CN=<prod-host>" \
-      -addext "subjectAltName=DNS:<prod-host>"
-    sudo chmod 600 <prod-host>.key
-    ```
-
-    Store the returned certificate **including the intermediate chain** as `/etc/ssl/teamable/<prod-host>.fullchain.pem`. Note the expiry date: renewal is manual.
-
-The private key never leaves the VM and never goes into a repository.
-
-### 6.3 HTTPS site with path routing
-
-The proxy settings are the same for every location and environment. Put them into a snippet, `/etc/nginx/snippets/teamable-proxy.conf`:
-
-```nginx
-proxy_set_header Host $host;
-proxy_set_header X-Forwarded-Proto https;
-proxy_set_header X-Real-IP $remote_addr;
-proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-proxy_read_timeout 3600;
-```
-
-Add the second `server` block to `/etc/nginx/sites-available/teamable-prod` and keep only the certificate lines of the option you used:
-
-```nginx
-server {
-    listen 443 ssl;
-    http2 on;
-    server_name <prod-host>;
-
-    # Option A (Let's Encrypt):
-    ssl_certificate     /etc/letsencrypt/live/<prod-host>/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/<prod-host>/privkey.pem;
-    # Option B (RZ):
-    # ssl_certificate     /etc/ssl/teamable/<prod-host>.fullchain.pem;
-    # ssl_certificate_key /etc/ssl/teamable/<prod-host>.key;
-
-    ssl_protocols TLSv1.2 TLSv1.3;
-    add_header Strict-Transport-Security "max-age=31536000" always;
-
-    client_max_body_size 20m;
-
-    # Backend: all Django routes, static files and the health check
-    location ~ ^/(api|admin|lti|oauth|static|health)(/|$) {
-        proxy_pass http://127.0.0.1:8002;
-        include snippets/teamable-proxy.conf;
-    }
-
-    # Frontend: replaced by "proxy_pass http://127.0.0.1:8003;" and the
-    # include above when the frontend is deployed (section 13.1)
-    location / {
-        return 404;
-    }
-}
-```
-
-```bash
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-!!! note "Debian 12"
-    `http2 on;` needs nginx 1.25.1 or newer. Debian 13 ships 1.26. On Debian 12 (nginx 1.22), remove the line `http2 on;` and write `listen 443 ssl http2;` instead.
-
-`proxy_read_timeout 3600` matches the timeouts of gunicorn (`config/gunicorn.conf.py`) and the container nginx, because team generation can take a long time.
-
-!!! warning "Auth token in the access logs"
-    After the LTI launch, the backend redirects to `https://<prod-host>/authenticate?token=…` (`src/canvas_oauth/oauth.py`). URLs with query strings end up in the access logs of the host nginx (`/var/log/nginx/`, rotated by logrotate, readable only by root and the group `adm`) and of the container nginx (`logs/nginx/` in the checkout, **not** rotated). Treat both as confidential and delete old container logs regularly. Moving the token out of the URL is a change in the backend and frontend.
+`http2 on;` needs nginx 1.25.1 or newer (Debian 13 ships 1.26). On Debian 12, write `listen 443 ssl http2;` instead.
 
 ---
 
-## 7. Start the backend
+## 6. Start the stack
 
 ```bash
-cd /opt/teamable/prod/backend
+cd /opt/teamable/teamable-dev-stack
 docker compose up -d --build
-docker compose ps                 # project teamable-prod, all three services "running"
+docker compose ps                 # all services "running"/"healthy"
 docker compose logs -f web        # collectstatic, migrate, gunicorn "Booting worker"
 ```
 
-Check the production settings (change 3.5):
-
-```bash
-docker compose exec web python manage.py check --deploy
-```
-
-Create an admin account once:
+The first build takes several minutes (frontend `yarn build`). Then create an admin account for Teamable:
 
 ```bash
 docker compose exec web python manage.py createsuperuser
 ```
 
-Then create the organization in the admin (`https://<prod-host>/admin/`) as in the local setup (LMS type `MOODLE`, LMS API URL = Platform ID).
+All services have `restart: unless-stopped` and Docker starts on boot, so the stack comes back after a reboot. `docker compose down` removes the containers; they only come back with the next `docker compose up -d`.
+
+---
+
+## 7. Moodle and LTI registration
+
+1. Open `https://<moodle-host>` and run the installation wizard (admin account, site name). The database settings come from `moodle-config.php`.
+2. Create the key pair **on the VM** in `teamable-backend/src`, register the tool in Moodle and write `lti_config_settings.json`, as in the [dev stack](dev-stack.md), section 6, with `https://<teamable-host>` and `https://<moodle-host>`. Use a separate key pair for the VM, not the one from your local stack.
+
+    | Where | Field | Value |
+    |---|---|---|
+    | Moodle tool | Tool URL | `https://<teamable-host>/lti/launch/` |
+    | Moodle tool | Initiate login URL | `https://<teamable-host>/lti/login/` |
+    | Moodle tool | Redirection URI(s) | `https://<teamable-host>/lti/launch/` |
+    | `lti_config_settings.json` | top-level key | `https://<moodle-host>` |
+    | `lti_config_settings.json` | `auth_login_url` | `https://<moodle-host>/mod/lti/auth.php` |
+    | `lti_config_settings.json` | `auth_token_url` | `https://<moodle-host>/mod/lti/token.php` |
+    | `lti_config_settings.json` | `key_set_url` | `https://<moodle-host>/mod/lti/certs.php` |
+
+3. Protect the key:
+
+    ```bash
+    chmod 700 teamable-backend/src/lti/config
+    chmod 600 teamable-backend/src/lti/config/private.key
+    ```
+
+4. At `https://<teamable-host>/admin/` → *Organizations* → *Add*: LMS type **MOODLE**, LMS API URL `https://<moodle-host>`.
+5. Test course and test students as in the [local setup](../../recherche/LMS-Anbindung/local-moodle-teamable-setup.md), sections 6 and 8. Never use real student data on this VM.
 
 ---
 
 ## 8. Checks
 
-### 8.1 Endpoint and health check
-
 ```bash
-# from your own machine
-curl -i https://<prod-host>/health/
-# HTTP/2 200
-# {"status": "ok"}
+# from your own machine (VPN)
+curl -I https://<teamable-host>/              # 200 or 3xx from the frontend, not 502
+curl -I https://<teamable-host>/admin/login/  # 200 from the backend
+curl -I https://<moodle-host>/                # 200 or 303 to the login page
+curl -I http://<teamable-host>/               # 301 → https://
 
-# HTTP is redirected
-curl -I http://<prod-host>/health/       # 301 → https://
-
-# Certificate is valid and the chain is complete
-curl -vI https://<prod-host>/health/ 2>&1 | grep -E "subject|issuer|expire"
+# certificate valid for both names, chain complete
+for h in <teamable-host> <moodle-host>; do
+  echo "== $h"; curl -vI "https://$h/" 2>&1 | grep -E "subject|issuer|expire|SSL certificate"
+done
 ```
 
-On the VM itself, without nginx and TLS (for example for a local monitoring check), the `Host` header has to be set. Otherwise Django answers with `400`, because `127.0.0.1` is not in `ALLOWED_HOSTS`:
-
-```bash
-curl -i -H "Host: <prod-host>" -H "X-Forwarded-Proto: https" http://127.0.0.1:8002/health/
-```
-
-A `400 Bad Request` means that the host name is missing from `SERVER_NAME`. A `403 CSRF verification failed` on the admin login means that `X-Forwarded-Proto` does not arrive as `https`. As long as the frontend is not deployed, `https://<prod-host>/` answers with `404`; this is expected.
-
-### 8.2 Container port is not reachable from outside
+`curl` fails with `SSL certificate problem` or `no alternative certificate subject name matches` if the chain is incomplete or a host name is missing from the certificate.
 
 ```bash
 # on the VM
-ss -tlnp | grep 8002       # must show 127.0.0.1:8002, not 0.0.0.0:8002
+cd /opt/teamable/teamable-dev-stack
+
+# container ports only on 127.0.0.1
+ss -tlnp | grep -E ':(8080|8008)\b'           # must show 127.0.0.1, not 0.0.0.0
+
+# backend reaches Moodle via host-gateway and the host nginx
+docker compose exec web python -c "import urllib.request; print(urllib.request.urlopen('https://<moodle-host>/mod/lti/certs.php').status)"
 ```
 
-### 8.3 Auto-restart after a reboot
+Then the end-to-end test: open the Teamable activity in the test course as a teacher, check that Teamable opens and that the student import shows the test students. Also check that the Django admin shows CSS (static files) and that the admin login works (no `403 CSRF`), and that Moodle under *Site administration → Notifications* shows no warning that cron has not run (`moodle-cron`, check with `docker compose logs moodle-cron`).
 
-Docker starts on boot (`systemctl enable docker`), and all services in `docker-compose.yml` have `restart: always`. Docker therefore restarts the containers on its own. No separate systemd unit is needed.
-
-```bash
-sudo reboot
-# log in again after about one minute
-cd /opt/teamable/prod/backend && docker compose ps
-curl -s https://<prod-host>/health/
-```
-
-!!! warning
-    `docker compose down` removes the containers. They are then **not** started again after a reboot, until the next `docker compose up -d`. `docker compose stop` only stops them until the next reboot: because of `restart: always`, Docker starts stopped containers again when the daemon starts.
+Once the backend has a health endpoint (section 11), `https://<teamable-host>/health/` is routed to it already.
 
 ---
 
-## 9. Update to a new version
+## 9. Updates
 
-Create a backup first (section 10), then:
+### 9.1 System
+
+Keep Debian up to date, including Docker and nginx:
 
 ```bash
-cd /opt/teamable/prod/backend
-git fetch --tags
-git checkout <new-tag>
-docker compose up -d --build      # migrations run automatically on start
-docker compose logs -f web
-curl -s https://<prod-host>/health/
+sudo apt-get update && sudo apt-get upgrade -y
 ```
 
-Deploy a new tag to staging first (section 13) and only then to production.
-
-**Rollback:** if the new version does not work, check out the previous tag and rebuild. If the new version has already run migrations, the old code may not work with the new schema. Restore the backup made before the update (section 10.2):
+Security updates can be installed automatically:
 
 ```bash
-git checkout <previous-tag>
+sudo apt-get install -y unattended-upgrades
+sudo dpkg-reconfigure -plow unattended-upgrades
+```
+
+By default, `unattended-upgrades` only installs updates from the Debian security repository. Docker comes from the Docker repository and is only updated by the manual `apt-get upgrade`. An update of Docker restarts the daemon; the containers come back on their own (`restart: unless-stopped`).
+
+### 9.2 Application code
+
+```bash
+cd /opt/teamable/teamable-dev-stack
+git -C teamable-backend pull
+git -C teamable-frontend pull
+docker compose up -d --build        # migrations run automatically on start
+docker compose logs -f web
+```
+
+### 9.3 Stack files
+
+```bash
+cd /opt/teamable/teamable-dev-stack
+git pull
+diff .env.example .env              # new variables? add them to .env
 docker compose up -d --build
 ```
 
+If `host-nginx.conf` or `teamable-proxy.conf` changed, copy them again as in section 5.2.
+
+### 9.4 Another Moodle version
+
+The Moodle version is set via `MOODLE_IMAGE` in `.env`; `moodle` and `moodle-cron` both use it. Moodle can only be upgraded, not downgraded, and the upgrade changes the database. Alternatively, test a new version in a second Compose project with its own `COMPOSE_PROJECT_NAME`, ports and host names.
+
+Back up database and `moodledata` first:
+
+```bash
+cd /opt/teamable/teamable-dev-stack
+mkdir -p ~/moodle-backup
+
+# database dump
+docker compose exec -T moodle-db sh -c 'mariadb-dump -u root -p"$MARIADB_ROOT_PASSWORD" --single-transaction moodle' \
+  | gzip > ~/moodle-backup/moodle-db-$(date +%F).sql.gz
+
+# moodledata (one-off container with the same volumes as the moodle service)
+docker compose run --rm --no-deps -v ~/moodle-backup:/backup --entrypoint tar moodle \
+  czf /backup/moodledata-$(date +%F).tar.gz -C /var/www/moodledata .
+```
+
+Then upgrade:
+
+```bash
+# set the new MOODLE_IMAGE in .env, then
+docker compose up -d moodle moodle-cron
+docker compose exec -u www-data moodle php /var/www/html/admin/cli/upgrade.php --non-interactive
+```
+
+The upgrade can also be started in the browser: log in as admin, Moodle then shows the upgrade page. To go back, import the dump into an empty database, unpack the archive into the emptied `moodledata` volume and set the old `MOODLE_IMAGE` again.
+
+Before switching to a new image, check:
+
+- **Image:** whether `brandkern/moodle` offers a tag for the target version at all (e.g. 5.3). If not, another image is needed, and `docker-compose.yml` and `moodle-config.php` have to be adapted to it.
+- **`moodle-config.php`:** it is mounted to `/var/www/html/config.php` and reads the variables `DB_*`, `WWWROOT` and `MOODLE_SSLPROXY`. Since Moodle 5.1, the web root is the subfolder `public/`, while `config.php` stays in the main folder. Check the path of the Moodle code in the new image, the mount target and the web server configuration of the image.
+
+This is the environment for testing Teamable against Moodle 5.3 for the RZ.
+
+### 9.5 Data
+
+The VM only has test data, so there are no regular backups. Moodle (`moodledata`, `moodle-db-data`) and Teamable (`postgres-data`) live in Docker volumes of the project `teamable-dev`. `docker compose down -v` or a changed `COMPOSE_PROJECT_NAME` loses them or makes them invisible. `git clean -x` in `teamable-backend` deletes the LTI key pair.
+
 ---
 
-## 10. Backup and restore
+## 10. Troubleshooting
 
-### 10.1 Daily backup
-
-```bash
-sudo mkdir -p /var/backups/teamable/prod
-sudo chown -R "$USER":"$USER" /var/backups/teamable
-chmod 700 /var/backups/teamable
-crontab -e
-```
-
-```cron
-# daily at 03:00, keep 14 days
-0 3 * * * cd /opt/teamable/prod/backend && docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > /var/backups/teamable/prod/teamable-$(date +\%F).sql.gz && find /var/backups/teamable/prod -name '*.sql.gz' -mtime +14 -delete
-```
-
-A backup on the same VM does not help if the VM or its disk is lost. Copy the dumps regularly to the backup storage outside the VM (section 2), e.g. with `rsync` or the tool provided by the RZ. The dumps contain personal data of students and have to be protected like the database itself.
-
-Before an update, create a backup manually:
-
-```bash
-cd /opt/teamable/prod/backend
-docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' \
-  | gzip > /var/backups/teamable/prod/teamable-$(date +%F-%H%M).sql.gz
-```
-
-### 10.2 Restore
-
-```bash
-cd /opt/teamable/prod/backend
-docker compose stop web nginx
-docker compose exec -T db sh -c 'dropdb -U "$POSTGRES_USER" --if-exists "$POSTGRES_DB" && createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
-gunzip -c /var/backups/teamable/prod/<file>.sql.gz \
-  | docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-docker compose start web nginx
-```
-
-Test the restore once after the first deployment, for example by restoring a production dump into staging. Staging then contains real personal data, so delete it again after the test.
-
----
-
-## 11. Troubleshooting
+Errors in the LTI launch and the Moodle registration: see the troubleshooting of the [dev stack](dev-stack.md#troubleshooting).
 
 | Symptom | Cause / solution |
 |---|---|
-| `KeyError: 'SERVER_NAME'` in `docker compose logs web` | `.env` is missing or `SERVER_NAME` is not set |
-| `RuntimeError: SECRET_KEY must be set` | `SECRET_KEY` is missing in `.env` (change 3.2) |
-| `400 Bad Request` | Requested host name is not in `SERVER_NAME` |
-| `403 CSRF verification failed` | Host nginx does not set `X-Forwarded-Proto https`, or the host name is not in `SERVER_NAME` |
-| `502 Bad Gateway` from the host nginx | Containers are not running (`docker compose ps`), `web` is still starting, or the port in the nginx site does not match `BACKEND_PORT` |
-| `404` from the host nginx for a backend URL | The path prefix is missing in the backend `location` of section 6.3 |
-| `docker compose ps` shows the containers of the other environment | `COMPOSE_PROJECT_NAME` is missing in `.env` (section 5.1) |
-| `port is already allocated` on `docker compose up` | Both environments use the same `BACKEND_PORT` |
-| `nginx -t`: `unknown directive "http2"` | nginx older than 1.25.1 (Debian 12), see the note in 6.3 |
-| `nginx -t`: `cannot load certificate` | Certificate lines of the wrong option are active in 6.3, or the certificate does not exist yet |
-| `web` restarts in a loop, `password authentication failed` | Password in `db.env` differs from the one used when the data directory was created (see 5.2) |
-| Admin without CSS | `collectstatic` failed, check `docker compose logs web`. The folder `staticfiles/` is shared by `web` and the container nginx. |
-| CORS error in the browser console | The frontend was built with a backend address of another origin (section 13.1) |
-| "LTI disabled" | `LTI_CONF_FOLDER`/`LTI_CONF_FILE_NAME` missing in `.env` |
-| LTI launch: file `lti_config_settings.json` not found | Volume `./src/lti/config:/code/lti/config:ro` missing in `docker-compose.yml` (change 3.6) |
-| `Missing canvas_course_id/canvas_user_id custom claims` | Deployed version has no Moodle support (change 3.1) |
-| Student import fails, timeout to Moodle | VM is not allowed to reach the Moodle server (outgoing firewall, section 2) |
-| Disk full | Container logs without limit (section 4), `logs/nginx/` or old backups in `/var/backups/teamable` |
+| `apt-get`, Docker installation, `docker compose build` or `git clone` hang until a timeout | Outgoing traffic is blocked by the RZ firewall. Ask the RZ to allow outgoing 80/443 and DNS (53) |
+| `git clone` of `teamable-dev-stack`: `Permission denied (publickey)` or `Repository not found` | Deploy key missing in the repository or `~/.ssh/config` wrong (section 3). Test with `ssh -T github-teamable-dev-stack`. |
+| SSH connection breaks or parts of the HTWG network are unreachable after Docker starts | Docker networks (`172.17.0.0/16` and following) overlap with addresses of the HTWG network or the VPN. Add `default-address-pools` to the existing `/etc/docker/daemon.json` from section 3 (e.g. `{"base": "10.200.0.0/16", "size": 24}`, choose a range the HTWG does not use), restart Docker and recreate the stack (`docker compose down && docker compose up -d`) |
+| `502 Bad Gateway` from the host nginx | Stack not running (`docker compose ps`), `web`/`frontend` still starting, or ports in `host-nginx.conf` do not match `TEAMABLE_PORT`/`MOODLE_PORT` |
+| `403 CSRF verification failed` | `X-Forwarded-Proto https` does not arrive: snippet not included in the host nginx, or `TEAMABLE_URL` is not `https://` |
+| Moodle redirects to `http://`, redirect loop, or mixed content | `MOODLE_SSLPROXY` is not `true`, or `MOODLE_URL` is not `https://<moodle-host>` |
+| Moodle: "Incorrect access detected, this server may be accessed only through … address" | Moodle was opened under another address than `MOODLE_URL` (other host name, `http://` instead of `https://`, or a port) |
+| `web` cannot reach Moodle (`certs.php`, import) | Firewall on the VM (e.g. `ufw`) blocks connections from the Docker bridge to port 443 of the host. Allow 443 for the Docker networks. |
+| LTI launch: `Permission denied` on `private.key` in `docker compose logs web` | The backend in the container runs as a user that cannot read the file after `chmod 600` (section 7). Use `chmod 644` on `private.key`, or give the file to the user the container runs as. |
+| `nginx -t`: `cannot load certificate` | Certificate from section 5.1 not there yet, or wrong file name |
+| Browser: certificate not valid for `<moodle-host>` | The certificate is missing the SAN for the second host name |
+| `password authentication failed` / `Access denied` in the database logs | Password in `.env` differs from the one used when the volume was created (section 4) |
+| Disk full | Docker build cache and old images: `docker system prune` (never with `--volumes`, that deletes the data) |
 
 ---
 
-## 12. Acceptance criteria
+## 11. Later: production
 
-| Criterion | Where it is covered |
-|---|---|
-| HTTPS under a fixed address | DNS entry (section 2), certificate and host nginx (section 6), check 8.1 |
-| Health check | `GET /health/` (change 3.4), check 8.1 |
-| Auto-restart after a VM reboot | `systemctl enable docker` + `restart: always` (sections 4, 8.3) |
-| No credentials in the repository | Changes 3.2, 3.3 and 3.6, secrets only on the VM (section 5), check 5.4 |
-| Deployment steps documented | This page |
+Running Teamable for the HTWG Moodle with real student data is a separate step. The detailed, earlier plan is the [Production plan (draft)](production-plan.md); it uses a different container setup, but its code snippets and commands can be reused. In short:
 
----
-
-## 13. Outlook: frontend and staging
-
-These parts are separate tasks. This section lists what they have to consider so that they fit the setup above.
-
-### 13.1 Frontend
-
-- **Build per environment:** `next.config.js` inserts `BACKEND_BASE_URI` into the client bundle **at build time**. The same image with a different `.env` is not enough; each environment needs its own build with `BACKEND_BASE_URI=https://<prod-host>` or `https://<staging-host>`. The Project Sets page also reads `NEXT_PUBLIC_BACKEND_URL` (see [Frontend inventory](../../current-state/frontend-inventory.md)); set it to the same value or remove it from the code.
-- **Port:** bind the container to `127.0.0.1:8003` (production) or `127.0.0.1:8013` (staging) and use its own `COMPOSE_PROJECT_NAME`, e.g. `teamable-prod-frontend`.
-- **Host nginx:** replace `return 404;` in `location /` (section 6.3) with `proxy_pass http://127.0.0.1:8003;` and `include snippets/teamable-proxy.conf;`.
-- **Server-side requests:** server components of Next.js call the backend from inside the container via `https://<prod-host>`. The VM must reach its own host name (section 2).
-
-### 13.2 Staging backend
-
-Same steps as for production (sections 4 to 9) with these values:
-
-| Setting | Value |
-|---|---|
-| Checkout | `/opt/teamable/staging/backend` |
-| `.env`: `COMPOSE_PROJECT_NAME` / `BACKEND_PORT` | `teamable-staging` / `8012` |
-| `.env`: `SERVER_NAME`, `FRONTEND_BASE_URL` | `<staging-host>`, `https://<staging-host>` |
-| `.env`: `SECRET_KEY`, `db.env`: `POSTGRES_PASSWORD` | own random values, never the ones from production |
-| LTI configuration | own key pair, Platform ID and URLs of the staging Moodle (`https://<moodle-dev-host>`) |
-| nginx site | `/etc/nginx/sites-available/teamable-staging`, `proxy_pass` to `127.0.0.1:8012` |
-| Data | test data only, no backups needed |
-
-On a shared VM, limit the memory of the staging containers so that staging cannot push production out of memory. `docker-compose.override.yml` is read automatically by Docker Compose and is ignored by Git (change 3.6):
-
-```yaml
-# /opt/teamable/staging/backend/docker-compose.override.yml
-services:
-    web:
-        mem_limit: 1g
-    db:
-        mem_limit: 512m
-    nginx:
-        mem_limit: 128m
-```
-
-### 13.3 Staging Moodle
-
-The `docker-compose.moodle.yml` of the local setup is not suitable for a server as it is:
-
-- **Address:** `WWWROOT` is also the LTI Platform ID. On the VM it has to be `https://<moodle-dev-host>` instead of `http://localhost:8008`, behind the host nginx with its own site and certificate, container port `127.0.0.1:8018`.
-- **Secrets:** the database passwords (`root`/`moodle`) are written into the file. Move them into an `.env` with random values.
-- **Image:** `brandkern/moodle:4.5-latest` is a community image without a fixed version. Pin a tested tag (the HTWG Moodle runs 4.5.14).
-- **Access:** reachable only from the campus network/VPN, or protected with HTTP basic auth in the host nginx.
-- **Backend → Moodle:** the staging backend calls `https://<moodle-dev-host>/mod/lti/token.php` from inside its container. If the VM cannot reach its own public address, add `extra_hosts: ["<moodle-dev-host>:host-gateway"]` to the `web` service in `docker-compose.override.yml`; the host nginx listens on all interfaces and answers there.
-- **Memory:** plan for about 1.5–2 GB RAM for Moodle and MariaDB together; set `mem_limit` as for the staging backend.
+- **Separate environment:** own VM (or at least its own Compose project), own host name. Do not mix test and real data.
+- **Own Compose file without Moodle:** no `moodle`, `moodle-db` and `moodle-cron`; the backend talks to the HTWG Moodle.
+- **Who must reach Teamable?** The frontend calls the API from the browser. If teachers open Teamable from Moodle at home without VPN, production has to be reachable from the internet, with the hardening below. Then Let's Encrypt is also possible.
+- **Changes in `teamable-backend`** before real data:
+    - merge the Moodle support into `master` with a linear migration history and deploy tags
+    - `SECRET_KEY` from the environment instead of hard-coded in `settings.py`
+    - remove the committed Postgres password (`db.env`) and the UBC API key from the code; both stay in the Git history and count as public
+    - health endpoint `/health/` with a database check
+    - `SESSION_COOKIE_SECURE`/`CSRF_COOKIE_SECURE`, switchable via an environment variable: set fixed whenever `DEBUG` is off, they break the local stack with `DEBUG=FALSE` over `http://` (the browser does not send the cookies, the admin login fails); then `manage.py check --deploy`
+    - a `.dockerignore`, so that the image does not contain `src/lti/config/` with the private key
+    - a supported Python version instead of 3.10
+- **Operations:** daily Postgres dumps with a copy outside the VM, a tested restore, updates tested on the development VM first, monitoring of the health endpoint.
+- **Backup of secrets:** `.env` and the LTI key pair, stored encrypted or in another protected place. Without the key pair, the tool has to be registered in Moodle again after losing the VM.
+- **Data protection:** clarify the processing of student data (names, courses, teams) with the data protection officer of the HTWG before going live, e.g. entry in the record of processing activities and deletion periods.
+- **Logs:** after the LTI launch the backend redirects to `/authenticate?token=…`. The token ends up in the access logs; treat them as confidential, or move the token out of the URL.
+- **Moodle side:** the RZ registers the tool in the HTWG Moodle with the production URLs (same fields as in section 7).
