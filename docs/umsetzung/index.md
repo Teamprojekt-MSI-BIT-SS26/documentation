@@ -11,3 +11,4 @@ Ergebnisse aus der Umsetzungsphase.
 ## Deployment
 
 - [AI Model Deployment on HTWG Server](Deployment/ai-model-deployment.md)
+- [Connect an AI Coding Assistant](Deployment/connect-ai-assistant.md)

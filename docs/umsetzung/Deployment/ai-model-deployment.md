@@ -280,7 +280,7 @@ general_settings:
   database_url: os.environ/DATABASE_URL
 ```
 
-The Qwen3.8 models are documented with `reasoning_effort` (`xhigh`, `medium`, `low`) and thinking on by default ([Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B)). The model card of Flash-Next does not describe how to switch thinking off. Check after the start that `coding` answers without a thinking part and `docs` with a shorter one (see [Test](#test)). Because of `drop_params: true`, LiteLLM silently drops `reasoning_effort` if it does not pass it on to `hosted_vllm`; then `docs` behaves like `coding-agent`. In that case, send it in `extra_body` instead, like `enable_thinking`.
+The Qwen3.8 models are documented with `reasoning_effort` (`xhigh`, `medium`, `low`) and thinking on by default ([Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B)). The model card of Flash-Next does not describe how to switch thinking off. Check after the start that `coding` answers without a thinking part and `docs` with a shorter one (see [API tests](#api)). Because of `drop_params: true`, LiteLLM silently drops `reasoning_effort` if it does not pass it on to `hosted_vllm`; then `docs` behaves like `coding-agent`. In that case, send it in `extra_body` instead, like `enable_thinking`.
 
 ### 5. Docker Compose
 
@@ -539,19 +539,13 @@ The key stops working immediately; the keys of all others stay valid.
 
 LiteLLM stores the requests and tokens per key. They can be viewed in the admin interface at `http://localhost:4000/ui` through the SSH tunnel (login with the master key).
 
-## Using the API
+## Tests
 
-The API is OpenAI-compatible. Every request sends the personal key as `Authorization: Bearer`.
+The API is OpenAI-compatible; every request sends the personal key as `Authorization: Bearer`. How developers connect their assistants is described on a separate page: [Connect an AI Coding Assistant](connect-ai-assistant.md). `ai-api.htwg-konstanz.de` is a placeholder until the operator gives us the DNS name.
 
-| Setting | Value |
-|---|---|
-| Base URL | `https://ai-api.htwg-konstanz.de/v1` |
-| API key | personal key, e.g. as environment variable `HTWG_AI_API_KEY` |
-| Models | `coding-agent`, `coding`, `docs` |
+Run these tests after the setup and after every change to Nginx, the firewall or `compose.yaml`. For the tests, create a key for yourself (see [Create a key](#create-a-key)) and store it in `HTWG_AI_API_KEY`.
 
-`ai-api.htwg-konstanz.de` is a placeholder until the operator gives us the DNS name.
-
-### Test
+### API
 
 ```bash
 API=https://ai-api.htwg-konstanz.de
@@ -604,47 +598,49 @@ curl -s -o /dev/null -w "%{http_code}\n" $API/v1/models               # 401
 curl -s -o /dev/null -w "%{http_code}\n" -X POST $API/key/generate    # 404
 ```
 
-### OpenCode
+### Access from outside
 
-Store the key in a file that only you can read, not in the configuration file:
+From a device that is **neither in the HTWG network nor connected to the VPN**, e.g. a laptop on a mobile hotspot, the server must not be reachable at all:
 
 ```bash
-mkdir -p ~/.config/opencode
-printf '%s' 'sk-…' > ~/.config/opencode/htwg-key
-chmod 600 ~/.config/opencode/htwg-key
+curl -m 10 -s -o /dev/null -w "%{http_code}\n" https://ai-api.htwg-konstanz.de/v1/models
 ```
 
-`opencode.json`:
+Expected: a timeout or `Connection refused` (curl prints `000`). Then connect the same device to the VPN and run the command again: now the answer must be `401`. If the server answers from outside, check the firewall rules ([step 8](#8-firewall)) and whether the operator's firewall lets port 443 through from everywhere.
 
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "model": "htwg/coding-agent",
-  "small_model": "htwg/coding",
-  "provider": {
-    "htwg": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "HTWG",
-      "options": {
-        "baseURL": "https://ai-api.htwg-konstanz.de/v1",
-        "apiKey": "{file:~/.config/opencode/htwg-key}"
-      },
-      "models": {
-        "coding-agent": { "name": "Agentic programming", "reasoning": true, "tool_call": true, "limit": { "context": 131072, "output": 32000 } },
-        "coding":       { "name": "Programming, fast", "tool_call": true, "limit": { "context": 131072, "output": 32000 } },
-        "docs":         { "name": "Documentation", "reasoning": true, "tool_call": true, "limit": { "context": 131072, "output": 32000 } }
-      }
-    }
-  }
-}
+### Restart after a reboot
+
+The containers start again by themselves, if Docker starts at boot and the restart policy is set:
+
+```bash
+systemctl is-enabled docker                                           # enabled
+docker inspect -f '{{.Name}} {{.HostConfig.RestartPolicy.Name}}' $(docker compose ps -q)   # unless-stopped for all
 ```
 
-- **`limit`** must match the server: `context` is `--max-model-len` from [step 5](#5-docker-compose), `output` must be smaller. Without it, OpenCode uses its own defaults; vLLM rejects a request whose prompt and requested output together exceed `--max-model-len`, and OpenCode does not know when to compact a long session. If `--max-model-len` changes, change `context` here too.
-- **Key:** the alternative is an environment variable, e.g. `export HTWG_AI_API_KEY="sk-…"` in `~/.zshrc` or `~/.bashrc` and `"apiKey": "{env:HTWG_AI_API_KEY}"`. In a local test, OpenCode 2.2.7 did not send the key this way (`Authentication Error, No api key passed in.`); the cause is not clear yet. The file variant has not been tested yet either. Check before the rollout which of the two works with the current OpenCode version. Never write the key itself into an `opencode.json` that is committed.
+Then test a real reboot. The server is shared, so the operator decides when it is rebooted; ask them to tell us before the next reboot, or agree on a time. After the reboot, without logging in to start anything:
 
-Other assistants such as Cline are set up the same way with the provider "OpenAI Compatible", the base URL and the key.
+1. wait until vLLM has loaded the model (`docker compose logs -f vllm`, several minutes)
+2. run the [API tests](#api) again: the models are listed and requests are answered
 
-**Tip for speed:** agents profit from prefix caching only if the beginning of the prompt stays the same. Avoid changing the system prompt, rules files or the order of tools during a session.
+Note the date and the result on this page.
+
+### OpenCode
+
+Connect OpenCode as described in [Connect an AI Coding Assistant](connect-ai-assistant.md) and let it create a file in an empty test directory. If the file is created, tool calls work end to end. Before the rollout, check which of the two key variants (`{file:…}` or `{env:…}`) works with the current OpenCode version: in a local test, OpenCode 2.2.7 did not send the key with `{env:…}`, and the file variant has not been tested yet.
+
+The `limit` values in the OpenCode configuration must match the server: `context` is `--max-model-len` from [step 5](#5-docker-compose), `output` must be smaller. vLLM rejects a request whose prompt and requested output together exceed `--max-model-len`, and OpenCode needs the value to know when to compact a long session. If `--max-model-len` changes, update the configuration on the connection page.
+
+### Acceptance criteria
+
+The criteria of the [task #68](https://github.com/Teamprojekt-MSI-BIT-SS26/documentation/issues/68) and how they are checked:
+
+| Criterion | Check | Result |
+|---|---|---|
+| Reachable only from the HTWG network or the VPN | [Access from outside](#access-from-outside) | open |
+| Requests without valid authentication are rejected | [API tests](#api): `401` without key, `404` for admin endpoints; a revoked key returns `401` | open |
+| The service restarts after a reboot | [Restart after a reboot](#restart-after-a-reboot) | open |
+| At least two team members have connected their assistant | each of them follows [Connect an AI Coding Assistant](connect-ai-assistant.md) and runs a task with `coding-agent` | open |
+| A guide for connecting an assistant is in the repository | [Connect an AI Coding Assistant](connect-ai-assistant.md) | done |
 
 ## Other setups
 
@@ -661,7 +657,7 @@ Changes to the vLLM service in [step 5](#5-docker-compose):
 - take `--tool-call-parser`, `--reasoning-parser` and the MTP setting from the [vLLM recipe](https://recipes.vllm.ai/Qwen/Qwen3.8-27B)
 - in `litellm-config.yaml`, change `model` of all three names to `hosted_vllm/qwen3.8-27b`
 
-`ipc: host` stays, because the two GPU processes exchange data in the same way. The model is dense, so each token needs more context memory than with Flash-Next and fewer long sessions fit at the same time; check `Maximum concurrency` in the log and lower `--max-model-len` or `--max-num-seqs` if needed. Change `limit.context` in the [OpenCode configuration](#opencode) to match.
+`ipc: host` stays, because the two GPU processes exchange data in the same way. The model is dense, so each token needs more context memory than with Flash-Next and fewer long sessions fit at the same time; check `Maximum concurrency` in the log and lower `--max-model-len` or `--max-num-seqs` if needed. Change `limit.context` in the [OpenCode configuration](connect-ai-assistant.md#opencode) to match.
 
 ### Fallback: two smaller models
 
@@ -674,7 +670,7 @@ If we get 4 GPUs, but the 4-bit version of Flash-Next does not run on the A100 o
 
 Then use two vLLM services with `device_ids: ["0", "1"]` and `["2", "3"]` and change `api_base` in `litellm-config.yaml`. The names in the API stay the same, so developers do not need to change anything.
 
-Gemma 4 31B in BF16 leaves only about 10 GB for context on two GPUs, enough for a few long sessions at the same time. Start with a lower `--max-model-len` for Gemma, e.g. `32768`, check `Maximum concurrency` in the log, and set `limit.context` of `docs` in the [OpenCode configuration](#opencode) to match.
+Gemma 4 31B in BF16 leaves only about 10 GB for context on two GPUs, enough for a few long sessions at the same time. Start with a lower `--max-model-len` for Gemma, e.g. `32768`, check `Maximum concurrency` in the log, and set `limit.context` of `docs` in the [OpenCode configuration](connect-ai-assistant.md#opencode) to match.
 
 ## Backup
 
@@ -751,8 +747,8 @@ After that, nothing of the setup remains on the server.
 | `400` with "model not allowed" | `/v1/models` with the key | allow the model for the key with `/key/update`, on the server or through the SSH tunnel (see [Authentication](#authentication)) |
 | `502 Bad Gateway` from Nginx | `docker compose logs litellm` | LiteLLM is not ready yet or has stopped |
 | `404` from Nginx | base URL in the client | the base URL must end with `/v1`; admin endpoints are only reachable through the SSH tunnel |
-| OpenCode: `max_completion_tokens … cannot be greater than max_model_len` | `limit` in `opencode.json` | set `limit.context` and `limit.output` to fit `--max-model-len`, see [OpenCode](#opencode) |
-| OpenCode: `Authentication Error, No api key passed in.` | `apiKey` in `opencode.json` | switch between `{file:…}` and `{env:…}`, see [OpenCode](#opencode) |
+| OpenCode: `max_completion_tokens … cannot be greater than max_model_len` | `limit` in `opencode.json` | set `limit.context` and `limit.output` to fit `--max-model-len`, see [Connect an AI Coding Assistant](connect-ai-assistant.md#opencode) |
+| OpenCode: `Authentication Error, No api key passed in.` | `apiKey` in `opencode.json` | switch between `{file:…}` and `{env:…}`, see [Connect an AI Coding Assistant](connect-ai-assistant.md#opencode) |
 | Tools are not called or thinking appears in the answer | flags in `compose.yaml` | check `--tool-call-parser` and `--reasoning-parser` against the current vLLM recipe |
 | A GPU is missing in `nvidia-smi` | | contact the operator, do not reinstall drivers |
 
