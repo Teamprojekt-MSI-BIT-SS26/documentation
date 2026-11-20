@@ -7,7 +7,7 @@
 
     **Code:** [`teamable-dev-stack`](https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-dev-stack), plus checkouts of [`teamable-backend`](https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-backend) and [`teamable-frontend`](https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-frontend).
 
-    **Assumptions:** Debian 13 on the VM, Docker Engine with the Compose plugin. Values in angle brackets such as `<teamable-host>` are placeholders.
+    **Assumptions:** Ubuntu 26.04 LTS on the VM, Docker Engine with the Compose plugin. Values in angle brackets such as `<teamable-host>` are placeholders.
 
     The earlier, detailed plan for production and staging is kept as [Production plan (draft)](production-plan.md).
 
@@ -17,10 +17,10 @@
 
 The stack needs **Docker Engine with the Compose plugin** (Compose 2.17 or newer, because of `dockerfile_inline`). Install it from the official Docker repository as described in the Docker documentation:
 
-- [Install Docker Engine on Debian](https://docs.docker.com/engine/install/debian/), method "Install using the `apt` repository"
+- [Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/), method "Install using the `apt` repository"
 - [Linux post-installation steps](https://docs.docker.com/engine/install/linux-postinstall/) (start on boot, use Docker without `sudo`)
 
-Do not use the packages `docker.io`/`docker-compose` from Debian: they are older and come without the Compose plugin in the required version. Check the installation:
+Do not use the Ubuntu packages `docker.io`, `docker-compose` and `docker-compose-v2` or the Docker snap: they lag behind the Docker repository and conflict with its packages. If one of them is already installed, remove it first as described in the Docker documentation ("Uninstall old versions"). Check the installation:
 
 ```bash
 docker --version
@@ -108,35 +108,12 @@ sudo usermod -aG docker "$USER"    # log in again afterwards
 !!! warning
     Members of the group `docker` are effectively root on the VM. Only add team members who also have `sudo` rights.
 
-`teamable-dev-stack` is private (backend and frontend are public). The VM gets read-only access to it via a **deploy key**. SSH goes over port 443 (`ssh.github.com`), so no outgoing port 22 is needed.
-
-```bash
-ssh-keygen -t ed25519 -N "" -C "htwg-vm teamable-dev-stack" -f ~/.ssh/deploy_teamable-dev-stack
-cat ~/.ssh/deploy_teamable-dev-stack.pub
-```
-
-Add the public key on GitHub in `teamable-dev-stack`: *Settings → Deploy keys → Add deploy key*, without "Allow write access" (needs admin rights on the repository). Then add a host alias to `~/.ssh/config`:
-
-```text
-Host github-teamable-dev-stack
-    HostName ssh.github.com
-    Port 443
-    User git
-    IdentityFile ~/.ssh/deploy_teamable-dev-stack
-    IdentitiesOnly yes
-```
-
-```bash
-chmod 600 ~/.ssh/config
-ssh -T github-teamable-dev-stack     # "Hi Teamprojekt-MSI-BIT-SS26/teamable-dev-stack! You've successfully authenticated..."
-```
-
-Clone the stack and the two application repositories:
+Clone the stack and the two application repositories (all three are public):
 
 ```bash
 sudo mkdir -p /opt/teamable
 sudo chown "$USER":"$USER" /opt/teamable
-git clone github-teamable-dev-stack:Teamprojekt-MSI-BIT-SS26/teamable-dev-stack.git /opt/teamable/teamable-dev-stack
+git clone https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-dev-stack.git /opt/teamable/teamable-dev-stack
 
 cd /opt/teamable/teamable-dev-stack
 git clone -b local-moodle-lti-nrps-import https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-backend.git
@@ -232,7 +209,7 @@ sudo systemctl enable nginx
 
 `host-nginx.conf` redirects HTTP to HTTPS and has one HTTPS server per host name with the same certificate: `<teamable-host>` → `127.0.0.1:8080`, `<moodle-host>` → `127.0.0.1:8008`. The snippet sets `Host` and `X-Forwarded-Proto https`. `nginx -t` fails with `cannot load certificate` until the certificate from 5.1 exists.
 
-`http2 on;` needs nginx 1.25.1 or newer (Debian 13 ships 1.26). On Debian 12, write `listen 443 ssl http2;` instead.
+`http2 on;` needs nginx 1.25.1 or newer; Ubuntu 26.04 meets this (check with `nginx -v`). With an older nginx, write `listen 443 ssl http2;` instead.
 
 ---
 
@@ -320,20 +297,20 @@ Once the backend has a health endpoint (section 11), `https://<teamable-host>/he
 
 ### 9.1 System
 
-Keep Debian up to date, including Docker and nginx:
+Keep Ubuntu up to date, including Docker and nginx:
 
 ```bash
 sudo apt-get update && sudo apt-get upgrade -y
 ```
 
-Security updates can be installed automatically:
+Ubuntu Server installs security updates automatically with `unattended-upgrades`, which is installed and enabled by default. Check it, and enable it if needed:
 
 ```bash
-sudo apt-get install -y unattended-upgrades
+cat /etc/apt/apt.conf.d/20auto-upgrades     # both values "1"
 sudo dpkg-reconfigure -plow unattended-upgrades
 ```
 
-By default, `unattended-upgrades` only installs updates from the Debian security repository. Docker comes from the Docker repository and is only updated by the manual `apt-get upgrade`. An update of Docker restarts the daemon; the containers come back on their own (`restart: unless-stopped`).
+Kernel updates only take effect after a reboot; if `/var/run/reboot-required` exists, reboot the VM (`sudo reboot`). By default, `unattended-upgrades` only installs updates from the Ubuntu security repository. Docker comes from the Docker repository and is only updated by the manual `apt-get upgrade`. An update of Docker restarts the daemon; the containers come back on their own (`restart: unless-stopped`).
 
 ### 9.2 Application code
 
@@ -405,7 +382,6 @@ Errors in the LTI launch and the Moodle registration: see the troubleshooting of
 | Symptom | Cause / solution |
 |---|---|
 | `apt-get`, Docker installation, `docker compose build` or `git clone` hang until a timeout | Outgoing traffic is blocked by the RZ firewall. Ask the RZ to allow outgoing 80/443 and DNS (53) |
-| `git clone` of `teamable-dev-stack`: `Permission denied (publickey)` or `Repository not found` | Deploy key missing in the repository or `~/.ssh/config` wrong (section 3). Test with `ssh -T github-teamable-dev-stack`. |
 | SSH connection breaks or parts of the HTWG network are unreachable after Docker starts | Docker networks (`172.17.0.0/16` and following) overlap with addresses of the HTWG network or the VPN. Add `default-address-pools` to the existing `/etc/docker/daemon.json` from section 3 (e.g. `{"base": "10.200.0.0/16", "size": 24}`, choose a range the HTWG does not use), restart Docker and recreate the stack (`docker compose down && docker compose up -d`) |
 | `502 Bad Gateway` from the host nginx | Stack not running (`docker compose ps`), `web`/`frontend` still starting, or ports in `host-nginx.conf` do not match `TEAMABLE_PORT`/`MOODLE_PORT` |
 | `403 CSRF verification failed` | `X-Forwarded-Proto https` does not arrive: snippet not included in the host nginx, or `TEAMABLE_URL` is not `https://` |

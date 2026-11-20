@@ -5,7 +5,7 @@
 
     The **same stack** runs locally and on the [dev instance on the HTWG VM](backend-htwg-vm.md). Only the `.env` differs: locally plain HTTP on `*.localhost`, on the VM HTTPS via the host nginx.
 
-    **Files:** repository [`teamable-dev-stack`](https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-dev-stack) (private for now; access via the GitHub organization). This page explains them; it does not repeat them.
+    **Files:** repository [`teamable-dev-stack`](https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-dev-stack). This page explains them; it does not repeat them.
 
     **Tested on 2026-11-16 with:** `teamable-dev-stack` `0af8dd9`, backend branch `local-moodle-lti-nrps-import` (`7a5850d`), frontend `main` (`98ce1c8`), Moodle `v4.5.4`, Docker Desktop on macOS. Local with `DEBUG=TRUE` and `DEBUG=FALSE`: Moodle with the own `config.php`, `moodle-cron`, LTI launch and student import via NRPS work. Not tested yet: the VM.
 
