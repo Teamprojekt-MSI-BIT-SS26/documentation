@@ -71,7 +71,7 @@ The host nginx terminates TLS and forwards each host name to its container port.
 
 | What | Value |
 |---|---|
-| **DNS** | `<teamable-host>` and `<moodle-host>`, e.g. `teamable-dev.in.htwg-konstanz.de` and `moodle-dev.in.htwg-konstanz.de` (not fixed yet) |
+| **DNS** | `<teamable-host>`: `teamable-analytics.in.htwg-konstanz.de`, already exists (forward and reverse, `141.37.22.162`). `<moodle-host>`: probably `moodle-teamable-analytics.in.htwg-konstanz.de`, on the same IP (requested, not confirmed yet) |
 | **Firewall** | 443 (HTTPS), 80 (HTTP, redirects to HTTPS), 22 (SSH) |
 | **TLS certificate** | One certificate from the RZ for both host names (section 5.1) |
 
@@ -192,8 +192,8 @@ The private key never leaves the VM and never goes into a repository.
 The templates are in `teamable-dev-stack`. Copy them and set the two host names in the first lines; `sed` then replaces the placeholders `<teamable-host>` and `<moodle-host>` in the copy:
 
 ```bash
-TEAMABLE_HOST=teamable-dev.in.htwg-konstanz.de   # your host names (section 2)
-MOODLE_HOST=moodle-dev.in.htwg-konstanz.de
+TEAMABLE_HOST=teamable-analytics.in.htwg-konstanz.de          # host names from section 2
+MOODLE_HOST=moodle-teamable-analytics.in.htwg-konstanz.de
 
 cd /opt/teamable/teamable-dev-stack
 sudo cp teamable-proxy.conf /etc/nginx/snippets/teamable-proxy.conf
