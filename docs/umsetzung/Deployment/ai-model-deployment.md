@@ -1,6 +1,6 @@
-# AI Model Deployment on the HTWG Server
+# AI Model Deployment on the GPU Server
 
-This guide sets up an open-weight AI model on the GPU server of HTWG, so that developers can use it with their AI coding assistants through one API. Every developer authenticates with a personal API key. Code and requests stay on this server; no external provider is involved. There are no costs or quotas per request; only the number of parallel requests per person is limited, so that one person cannot use the whole capacity.
+This guide sets up an open-weight AI model on the GPU server, so that developers can use it with their AI coding assistants through one API. Every developer authenticates with a personal API key. Code and requests stay on this server; no external provider is involved. There are no costs or quotas per request; only the number of parallel requests per person is limited, so that one person cannot use the whole capacity.
 
 Model, engine settings and server setup are chosen to fit each other and the A100 GPUs. Settings that cannot be decided in advance are measured with a [benchmark](#9-benchmark-and-tuning). How many GPUs we get is still open; the guide describes the setup with 4 GPUs and a variant with 2 (see [How many GPUs](#how-many-gpus)).
 
@@ -22,7 +22,7 @@ flowchart LR
 | **vLLM** | runs the model on the GPUs, OpenAI-compatible API | container `vllm/vllm-openai` | only inside the Docker network | Apache 2.0 |
 | **LiteLLM** | one endpoint for all uses; checks the personal API keys, sets the right parameters for each use, counts usage | container `ghcr.io/berriai/litellm` | only through Nginx | MIT |
 | **PostgreSQL** | stores the API keys and the usage for LiteLLM | container `postgres:16` | only inside the Docker network | PostgreSQL License |
-| **Nginx** | encrypts the connection (TLS) | package on the server | HTWG network and VPN, port 443 | BSD |
+| **Nginx** | encrypts the connection (TLS) | package on the server | allowed networks only, port 443 | BSD |
 
 The model is downloaded once from Hugging Face and stored on the server; its license is `qwen-community-1.0` (see [Why Qwen3.8-Flash-Next](#why-qwen38-flash-next)). Developers only see the LiteLLM endpoint. vLLM itself has no authentication and must never be reachable from outside.
 
@@ -30,7 +30,9 @@ The model is downloaded once from Hugging Face and stored on the server; its lic
 
 ### What is known
 
-HTWG has a GPU cluster with **8 × NVIDIA A100 40 GB** (320 GB VRAM), two processors with together 192 cores and, according to HTWG, 5 PetaFLOPS. It was bought for the BMBF project "Deep Doubt" of Prof. Dr. Oliver Dürr at the Institute for Optical Systems (IOS) and is used by professors, doctoral candidates and student assistants, later also for theses *(HTWG: [Gamer würden neidisch werden](https://www.htwg-konstanz.de/hochschule/magazin/gamer-wuerden-neidisch-werden), 18 February 2021)*. RAM, storage, network and the exact system are not published, and there is no newer source. Who operates the server today and decides about our request is not clear yet; this guide calls them **the operator**. According to what we heard, the server belongs to IOS itself and not to central HTWG IT. Where it is located and whether it is in the HTWG network is not known. The guide assumes access from the HTWG network and VPN; if the server is in another network, Nginx, firewall and DNS name change accordingly.
+HTWG has a GPU cluster with **8 × NVIDIA A100 40 GB** (320 GB VRAM), two processors with together 192 cores and, according to HTWG, 5 PetaFLOPS. It was bought for the BMBF project "Deep Doubt" of Prof. Dr. Oliver Dürr at the Institute for Optical Systems (IOS) and is used by professors, doctoral candidates and student assistants, later also for theses *(HTWG: [Gamer würden neidisch werden](https://www.htwg-konstanz.de/hochschule/magazin/gamer-wuerden-neidisch-werden), 18 February 2021)*. RAM, storage, network and the exact system are not published, and there is no newer source. Who operates the server today and decides about our request is not clear yet; this guide calls them **the operator**. According to what we heard, the server belongs to IOS itself and not to central HTWG IT. Where it is located and in which network is not known. Which networks may reach the service is agreed with the operator; this guide calls them the **allowed networks** (e.g. a VPN).
+
+**Ollama is already running on the server** and serves AI models there. If the operator agrees, we would rather use this existing setup than run a second one next to it; ideally only our model is added. This guide describes the setup from scratch on a plain Linux server. It serves as a basis for the discussion with the operator, not as a fixed requirement.
 
 8 × A100 40 GB, 320 GB and 5 PetaFLOPS are exactly the data of an **NVIDIA DGX A100**, which has 1 TB RAM, local NVMe storage and connects all GPUs with NVLink through NVSwitch ([NVIDIA DGX A100 user guide](https://docs.nvidia.com/dgx/dgxa100-user-guide/introduction-to-dgxa100.html)). A DGX A100 has 2 × 64 cores, not 2 × 96, so this is an assumption that has to be confirmed.
 
@@ -64,7 +66,7 @@ The setup is kept small, so that it does not get in the way of other users and c
 |---|---|
 | One directory on the local SSD, e.g. `/raid/ai-api` | configuration, model files, database, secrets (`.env`, mode 600) |
 | Nginx site | `/etc/nginx/sites-available/ai-api` |
-| Firewall rule | port 443 only from the HTWG network and VPN, set by us or centrally by the operator |
+| Firewall rule | port 443 only from the allowed networks, set by us or centrally by the operator |
 | Our user in the `docker` group | to manage the containers without `sudo` |
 | Extra rights for the vLLM container | `ipc: host` for the data exchange between the GPU processes, `memlock: unlimited` to pin the n-gram table in RAM; both need the consent of the operator |
 | Nothing else | no systemd services, drivers or kernel changes; the containers restart by themselves after a reboot |
@@ -73,7 +75,7 @@ Isolation from other users: our GPUs and CPU cores are fixed in Docker (`device_
 
 | Network | What | When |
 |---|---|---|
-| incoming | HTTPS (443) from the HTWG network and VPN | permanently |
+| incoming | HTTPS (443) from the allowed networks | permanently |
 | incoming | SSH for us | permanently |
 | outgoing | Hugging Face (model), Docker Hub and ghcr.io (images), Ubuntu packages | only during setup and updates |
 
@@ -85,6 +87,9 @@ Possible contacts: Prof. Dr. Georg Umlauf (director of IOS) or Prof. Dr. Oliver 
 
 **Questions**
 
+- Existing setup (Ollama)
+    - How is Ollama reachable? Is there already a reverse proxy with TLS, a DNS name or a user management with API keys (e.g. Open WebUI)?
+    - Could we use Ollama and add our own model if needed? How many resources would be free for it?
 - Hardware
     - Which system is it exactly (DGX A100?), how much RAM, local NVMe storage?
     - How many GPUs can we get exclusively (4 preferred, at least 2), ideally attached to the same CPU? Who else uses the cluster today?
@@ -96,7 +101,7 @@ Possible contacts: Prof. Dr. Georg Umlauf (director of IOS) or Prof. Dr. Oliver 
     - Are `ipc: host` and `memlock: unlimited` allowed for our vLLM container (see [step 5](#5-docker-compose))?
     - Are there rules for software, licenses or updates that we have to follow?
 - Network
-    - Where is the server located, and in which network? Can it be reached from the HTWG network and the VPN?
+    - Where is the server located, and in which network? From which networks should the service be reachable (e.g. a VPN)?
     - May we set up Nginx and the firewall rule ourselves?
     - May the server download the model from Hugging Face and images from Docker Hub and ghcr.io (only during setup and updates)?
 
@@ -104,8 +109,8 @@ Possible contacts: Prof. Dr. Georg Umlauf (director of IOS) or Prof. Dr. Oliver 
 
 - SSH access with a key, a user in the `docker` group, and sudo for Nginx and the firewall
 - A directory on the local NVMe SSD, e.g. `/raid/ai-api`, owned by our user
-- A DNS name, e.g. `ai-api.htwg-konstanz.de`, and a TLS certificate for it
-- The address ranges of the HTWG network and the VPN for the firewall
+- A DNS name for the API (`<ai-api-host>` in this guide) and a TLS certificate for it
+- The address ranges of the allowed networks for the firewall
 
 ## Model
 
@@ -403,7 +408,7 @@ upstream litellm {
 
 server {
     listen 443 ssl http2;
-    server_name ai-api.htwg-konstanz.de;          # DNS name from the operator
+    server_name <ai-api-host>;          # DNS name from the operator
 
     ssl_certificate     /etc/ssl/certs/ai-api.pem;  # certificate from the operator
     ssl_certificate_key /etc/ssl/private/ai-api.key;
@@ -439,7 +444,7 @@ sudo systemctl reload nginx
 
 ### 8. Firewall
 
-Only SSH and HTTPS from the HTWG network and VPN are allowed. Agree on the rules with the operator first: other users may run services on the server that must stay reachable. If the operator manages the firewall of the cluster centrally, ask them to open port 443 instead. Get the address ranges from the operator or the computing centre.
+Only SSH and HTTPS from the allowed networks are allowed. Agree on the rules with the operator first: other users may run services on the server that must stay reachable. If the operator manages the firewall of the cluster centrally, ask them to open port 443 instead. Get the address ranges from the operator.
 
 ```bash
 sudo ufw status verbose     # is ufw already active, and with which rules?
@@ -448,18 +453,15 @@ sudo ufw status verbose     # is ufw already active, and with which rules?
 **ufw already active:** only add our rules for port 443 and leave the others alone:
 
 ```bash
-sudo ufw allow from <HTWG network> to any port 443 proto tcp
-sudo ufw allow from <VPN network> to any port 443 proto tcp
+sudo ufw allow from <allowed network> to any port 443 proto tcp    # once per allowed network
 ```
 
 **ufw not active, and the operator agrees:** allow SSH **before** enabling the firewall, otherwise the SSH connection is cut. `deny incoming` blocks everything else, including services of other users:
 
 ```bash
 sudo ufw default deny incoming
-sudo ufw allow from <HTWG network> to any port 22 proto tcp
-sudo ufw allow from <VPN network> to any port 22 proto tcp
-sudo ufw allow from <HTWG network> to any port 443 proto tcp
-sudo ufw allow from <VPN network> to any port 443 proto tcp
+sudo ufw allow from <allowed network> to any port 22 proto tcp     # once per allowed network
+sudo ufw allow from <allowed network> to any port 443 proto tcp
 sudo ufw enable
 ```
 
@@ -541,21 +543,21 @@ LiteLLM stores the requests and tokens per key. They can be viewed in the admin 
 
 ## Tests
 
-The API is OpenAI-compatible; every request sends the personal key as `Authorization: Bearer`. How developers connect their assistants is described on a separate page: [Connect an AI Coding Assistant](connect-ai-assistant.md). `ai-api.htwg-konstanz.de` is a placeholder until the operator gives us the DNS name.
+The API is OpenAI-compatible; every request sends the personal key as `Authorization: Bearer`. How developers connect their assistants is described on a separate page: [Connect an AI Coding Assistant](connect-ai-assistant.md). `<ai-api-host>` is a placeholder for the DNS name the operator gives us.
 
-Run these tests after the setup and after every change to Nginx, the firewall or `compose.yaml`. For the tests, create a key for yourself (see [Create a key](#create-a-key)) and store it in `HTWG_AI_API_KEY`.
+Run these tests after the setup and after every change to Nginx, the firewall or `compose.yaml`. For the tests, create a key for yourself (see [Create a key](#create-a-key)) and store it in `AI_API_KEY`.
 
 ### API
 
 ```bash
-API=https://ai-api.htwg-konstanz.de
+API=https://<ai-api-host>
 
 # Which models can my key use?
-curl $API/v1/models -H "Authorization: Bearer $HTWG_AI_API_KEY"
+curl $API/v1/models -H "Authorization: Bearer $AI_API_KEY"
 
 # A short request without thinking
 curl $API/v1/chat/completions \
-  -H "Authorization: Bearer $HTWG_AI_API_KEY" \
+  -H "Authorization: Bearer $AI_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "coding",
@@ -569,7 +571,7 @@ The answer of `coding` should not contain a `reasoning_content` field; the same 
 
 ```bash
 curl $API/v1/chat/completions \
-  -H "Authorization: Bearer $HTWG_AI_API_KEY" \
+  -H "Authorization: Bearer $AI_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "coding",
@@ -586,7 +588,7 @@ curl $API/v1/chat/completions \
 
 ```bash
 curl -N $API/v1/chat/completions \
-  -H "Authorization: Bearer $HTWG_AI_API_KEY" \
+  -H "Authorization: Bearer $AI_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model": "coding", "stream": true, "messages": [{"role": "user", "content": "Count from 1 to 20."}]}'
 ```
@@ -600,13 +602,13 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST $API/key/generate    # 404
 
 ### Access from outside
 
-From a device that is **neither in the HTWG network nor connected to the VPN**, e.g. a laptop on a mobile hotspot, the server must not be reachable at all:
+From a device that is **not in any of the allowed networks**, e.g. a laptop on a mobile hotspot, the server must not be reachable at all:
 
 ```bash
-curl -m 10 -s -o /dev/null -w "%{http_code}\n" https://ai-api.htwg-konstanz.de/v1/models
+curl -m 10 -s -o /dev/null -w "%{http_code}\n" https://<ai-api-host>/v1/models
 ```
 
-Expected: a timeout or `Connection refused` (curl prints `000`). Then connect the same device to the VPN and run the command again: now the answer must be `401`. If the server answers from outside, check the firewall rules ([step 8](#8-firewall)) and whether the operator's firewall lets port 443 through from everywhere.
+Expected: a timeout or `Connection refused` (curl prints `000`). Then connect the same device to an allowed network (e.g. the VPN) and run the command again: now the answer must be `401`. If the server answers from outside, check the firewall rules ([step 8](#8-firewall)) and whether the operator's firewall lets port 443 through from everywhere.
 
 ### Restart after a reboot
 
@@ -636,7 +638,7 @@ The criteria of the [task #68](https://github.com/Teamprojekt-MSI-BIT-SS26/docum
 
 | Criterion | Check | Result |
 |---|---|---|
-| Reachable only from the HTWG network or the VPN | [Access from outside](#access-from-outside) | open |
+| Reachable only from the allowed networks | [Access from outside](#access-from-outside) | open |
 | Requests without valid authentication are rejected | [API tests](#api): `401` without key, `404` for admin endpoints; a revoked key returns `401` | open |
 | The service restarts after a reboot | [Restart after a reboot](#restart-after-a-reboot) | open |
 | At least two team members have connected their assistant | each of them follows [Connect an AI Coding Assistant](connect-ai-assistant.md) and runs a task with `coding-agent` | open |
