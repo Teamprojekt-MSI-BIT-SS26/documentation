@@ -11,5 +11,6 @@ Ergebnisse aus der Umsetzungsphase.
 ## Deployment
 
 - [Teamable dev stack](Deployment/dev-stack.md)
+- [Set up the HTWG VM](Deployment/vm-setup.md)
 - [Dev instance on the HTWG VM](Deployment/backend-htwg-vm.md)
 - [Production plan (draft)](Deployment/production-plan.md)
