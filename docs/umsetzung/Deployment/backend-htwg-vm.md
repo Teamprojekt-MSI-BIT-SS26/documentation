@@ -9,26 +9,7 @@
 
     **Assumptions:** Ubuntu 26.04 LTS on the VM, Docker Engine with the Compose plugin. Values in angle brackets such as `<teamable-host>` are placeholders.
 
-    The earlier, detailed plan for production and staging is kept as [Production plan (draft)](production-plan.md).
-
----
-
-## Prerequisite: Docker
-
-The stack needs **Docker Engine with the Compose plugin** (Compose 2.17 or newer, because of `dockerfile_inline`). Install it from the official Docker repository as described in the Docker documentation:
-
-- [Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/), method "Install using the `apt` repository"
-- [Linux post-installation steps](https://docs.docker.com/engine/install/linux-postinstall/) (start on boot, use Docker without `sudo`)
-
-Do not use the Ubuntu packages `docker.io`, `docker-compose` and `docker-compose-v2` or the Docker snap: they lag behind the Docker repository and conflict with its packages. If one of them is already installed, remove it first as described in the Docker documentation ("Uninstall old versions"). Check the installation:
-
-```bash
-docker --version
-docker compose version     # v2.17 or newer
-sudo docker run --rm hello-world
-```
-
-Section 3 contains the settings for the VM that come on top of the installation (log size, group `docker`).
+    Production with real student data builds on this setup: [Production plan (draft)](production-plan.md).
 
 ---
 
@@ -69,11 +50,11 @@ The host nginx terminates TLS and forwards each host name to its container port.
 
 ## 2. Request from the RZ
 
-| What | Value |
-|---|---|
-| **DNS** | `<teamable-host>`: `teamable-analytics.in.htwg-konstanz.de`, already exists (forward and reverse, `141.37.22.162`). `<moodle-host>`: probably `moodle-teamable-analytics.in.htwg-konstanz.de`, on the same IP (requested, not confirmed yet) |
-| **Firewall** | 443 (HTTPS), 80 (HTTP, redirects to HTTPS), 22 (SSH) |
-| **TLS certificate** | One certificate from the RZ for both host names (section 5.1) |
+| What | Value | Status |
+|---|---|---|
+| **DNS** | `<teamable-host>`: `teamable-analytics.in.htwg-konstanz.de` (forward and reverse, `141.37.22.162`). `<moodle-host>`: `moodle-teamable-analytics.in.htwg-konstanz.de`, same IP | done |
+| **Firewall** | Inbound from the VPN only: 443 (HTTPS), 80 (HTTP, redirects to HTTPS), 22 (SSH). Outbound 80/443 and DNS for `apt`, Docker Hub and GitHub | done |
+| **TLS certificate** | One certificate from the RZ for both host names (section 5.1). Until then a temporary one (section 5.2) | pending |
 
 ---
 
@@ -86,9 +67,17 @@ sudo apt-get update && sudo apt-get upgrade -y
 sudo apt-get install -y ca-certificates curl git nginx openssl
 ```
 
-Install Docker as described in the [prerequisites](#prerequisite-docker), then start it on boot:
+The stack needs **Docker Engine with the Compose plugin** (Compose 2.17 or newer, because of `dockerfile_inline`). Install it from the official Docker repository as described in the Docker documentation:
+
+- [Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/), method "Install using the `apt` repository"
+- [Linux post-installation steps](https://docs.docker.com/engine/install/linux-postinstall/) (start on boot, use Docker without `sudo`)
+
+Do not use the Ubuntu packages `docker.io`, `docker-compose` and `docker-compose-v2` or the Docker snap: they lag behind the Docker repository and conflict with its packages. If one of them is already installed, remove it first as described in the Docker documentation ("Uninstall old versions"). Check the installation and start Docker on boot:
 
 ```bash
+docker --version
+docker compose version     # v2.17 or newer
+sudo docker run --rm hello-world
 sudo systemctl enable --now docker
 ```
 
@@ -170,7 +159,14 @@ openssl rand -hex 32
 
 ## 5. TLS and host nginx
 
-### 5.1 Certificate from the RZ
+The commands in this section and in section 6.2 use the two host names from section 2. Set them once in the shell (again after a new SSH login):
+
+```bash
+TEAMABLE_HOST=teamable-analytics.in.htwg-konstanz.de
+MOODLE_HOST=moodle-teamable-analytics.in.htwg-konstanz.de
+```
+
+### 5.1 Key and CSR for the RZ
 
 Create a private key and a CSR for both host names on the VM and send only the CSR to the RZ:
 
@@ -178,8 +174,8 @@ Create a private key and a CSR for both host names on the VM and send only the C
 sudo mkdir -p /etc/ssl/teamable && cd /etc/ssl/teamable
 sudo openssl req -new -newkey rsa:3072 -nodes \
   -keyout teamable-dev.key -out teamable-dev.csr \
-  -subj "/CN=<teamable-host>" \
-  -addext "subjectAltName=DNS:<teamable-host>,DNS:<moodle-host>"
+  -subj "/CN=$TEAMABLE_HOST" \
+  -addext "subjectAltName=DNS:$TEAMABLE_HOST,DNS:$MOODLE_HOST"
 sudo chmod 600 teamable-dev.key
 ```
 
@@ -187,33 +183,47 @@ Store the returned certificate **including the intermediate chain** as `/etc/ssl
 
 The private key never leaves the VM and never goes into a repository.
 
-### 5.2 nginx sites
+### 5.2 Temporary certificate
 
-The templates are in `teamable-dev-stack`. Copy them and set the two host names in the first lines; `sed` then replaces the placeholders `<teamable-host>` and `<moodle-host>` in the copy:
+nginx does not start without a certificate. Until the RZ delivers it, create a self-signed one with the key from 5.1, valid for 90 days. Skip this step if the certificate from the RZ is already there.
 
 ```bash
-TEAMABLE_HOST=teamable-analytics.in.htwg-konstanz.de          # host names from section 2
-MOODLE_HOST=moodle-teamable-analytics.in.htwg-konstanz.de
+cd /etc/ssl/teamable
+sudo openssl req -x509 -days 90 -key teamable-dev.key -out teamable-dev.fullchain.pem \
+  -subj "/CN=$TEAMABLE_HOST" \
+  -addext "subjectAltName=DNS:$TEAMABLE_HOST,DNS:$MOODLE_HOST"
+```
 
+Browsers show a certificate warning, and `curl` needs `-k` for the checks in section 8. The backend does not trust the certificate either; section 6.2 covers that.
+
+Once the certificate from the RZ arrives, store it as `teamable-dev.fullchain.pem` (overwrites the temporary one), run `sudo systemctl reload nginx` and undo the workaround from section 6.2.
+
+### 5.3 nginx sites
+
+The templates are in `teamable-dev-stack`. Copy them; `sed` replaces the placeholders `<teamable-host>` and `<moodle-host>` in the copy:
+
+```bash
 cd /opt/teamable/teamable-dev-stack
 sudo cp teamable-proxy.conf /etc/nginx/snippets/teamable-proxy.conf
 sudo cp host-nginx.conf /etc/nginx/sites-available/teamable-dev
 sudo sed -i "s/<teamable-host>/$TEAMABLE_HOST/g; s/<moodle-host>/$MOODLE_HOST/g" \
   /etc/nginx/sites-available/teamable-dev
 
-sudo ln -s /etc/nginx/sites-available/teamable-dev /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/teamable-dev /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl reload nginx
 sudo systemctl enable nginx
 ```
 
-`host-nginx.conf` redirects HTTP to HTTPS and has one HTTPS server per host name with the same certificate: `<teamable-host>` → `127.0.0.1:8080`, `<moodle-host>` → `127.0.0.1:8008`. The snippet sets `Host` and `X-Forwarded-Proto https`. `nginx -t` fails with `cannot load certificate` until the certificate from 5.1 exists.
+`host-nginx.conf` redirects HTTP to HTTPS and has one HTTPS server per host name with the same certificate: `<teamable-host>` → `127.0.0.1:8080`, `<moodle-host>` → `127.0.0.1:8008`. The snippet sets `Host` and `X-Forwarded-Proto https`. `nginx -t` fails with `cannot load certificate` if `teamable-dev.fullchain.pem` is missing (5.1 or 5.2).
 
 `http2 on;` needs nginx 1.25.1 or newer; Ubuntu 26.04 meets this (check with `nginx -v`). With an older nginx, write `listen 443 ssl http2;` instead.
 
 ---
 
 ## 6. Start the stack
+
+### 6.1 Start
 
 ```bash
 cd /opt/teamable/teamable-dev-stack
@@ -229,6 +239,41 @@ docker compose exec web python manage.py createsuperuser
 ```
 
 All services have `restart: unless-stopped` and Docker starts on boot, so the stack comes back after a reboot. `docker compose down` removes the containers; they only come back with the next `docker compose up -d`.
+
+### 6.2 While the certificate is self-signed
+
+Only needed with the temporary certificate from 5.2. `web` does not trust it: the LTI launch fails with `500`, and `docker compose logs web` shows `CERTIFICATE_VERIFY_FAILED … self-signed certificate` when fetching `certs.php`.
+
+Build a CA bundle from the system CAs plus the certificate, so that other HTTPS targets keep working, and mount it with a Compose override file. Compose loads `docker-compose.override.yml` automatically; the tracked `docker-compose.yml` stays unchanged:
+
+```bash
+sudo sh -c 'cat /etc/ssl/certs/ca-certificates.crt /etc/ssl/teamable/teamable-dev.fullchain.pem > /etc/ssl/teamable/ca-bundle-dev.pem'
+sudo chmod 644 /etc/ssl/teamable/ca-bundle-dev.pem
+
+cd /opt/teamable/teamable-dev-stack
+cat > docker-compose.override.yml <<'EOF'
+services:
+  web:
+    volumes:
+      - /etc/ssl/teamable/ca-bundle-dev.pem:/etc/ssl/ca-bundle-dev.pem:ro
+    environment:
+      REQUESTS_CA_BUNDLE: /etc/ssl/ca-bundle-dev.pem   # requests / PyLTI1p3
+      SSL_CERT_FILE: /etc/ssl/ca-bundle-dev.pem        # urllib, ssl
+EOF
+docker compose up -d web
+
+# must print 200 (MOODLE_HOST from section 5)
+docker compose exec web python -c "import requests; print(requests.get('https://$MOODLE_HOST/mod/lti/certs.php').status_code)"
+```
+
+Do not commit the override file. Once the certificate from the RZ is in place (section 5.2), undo the workaround:
+
+```bash
+cd /opt/teamable/teamable-dev-stack
+rm docker-compose.override.yml
+sudo rm /etc/ssl/teamable/ca-bundle-dev.pem
+docker compose up -d web
+```
 
 ---
 
@@ -250,6 +295,7 @@ All services have `restart: unless-stopped` and Docker starts on boot, so the st
 3. Protect the key:
 
     ```bash
+    cd /opt/teamable/teamable-dev-stack
     chmod 700 teamable-backend/src/lti/config
     chmod 600 teamable-backend/src/lti/config/private.key
     ```
@@ -331,7 +377,7 @@ diff .env.example .env              # new variables? add them to .env
 docker compose up -d --build
 ```
 
-If `host-nginx.conf` or `teamable-proxy.conf` changed, copy them again as in section 5.2.
+If `host-nginx.conf` or `teamable-proxy.conf` changed, copy them again as in section 5.3.
 
 ### 9.4 Another Moodle version
 
@@ -388,8 +434,8 @@ Errors in the LTI launch and the Moodle registration: see the troubleshooting of
 | Moodle redirects to `http://`, redirect loop, or mixed content | `MOODLE_SSLPROXY` is not `true`, or `MOODLE_URL` is not `https://<moodle-host>` |
 | Moodle: "Incorrect access detected, this server may be accessed only through … address" | Moodle was opened under another address than `MOODLE_URL` (other host name, `http://` instead of `https://`, or a port) |
 | `web` cannot reach Moodle (`certs.php`, import) | Firewall on the VM (e.g. `ufw`) blocks connections from the Docker bridge to port 443 of the host. Allow 443 for the Docker networks. |
-| LTI launch: `Permission denied` on `private.key` in `docker compose logs web` | The backend in the container runs as a user that cannot read the file after `chmod 600` (section 7). Use `chmod 644` on `private.key`, or give the file to the user the container runs as. |
-| `nginx -t`: `cannot load certificate` | Certificate from section 5.1 not there yet, or wrong file name |
+| `nginx -t`: `cannot load certificate` | `teamable-dev.fullchain.pem` missing or wrong file name. Until the RZ certificate arrives, use the temporary certificate (section 5.2) |
+| LTI launch `500`, log: `CERTIFICATE_VERIFY_FAILED … self-signed certificate` for `certs.php` | `web` does not trust the temporary self-signed certificate. Mount the CA bundle with the override file (section 6.2) |
 | Browser: certificate not valid for `<moodle-host>` | The certificate is missing the SAN for the second host name |
 | `password authentication failed` / `Access denied` in the database logs | Password in `.env` differs from the one used when the volume was created (section 4) |
 | Disk full | Docker build cache and old images: `docker system prune` (never with `--volumes`, that deletes the data) |
@@ -398,21 +444,4 @@ Errors in the LTI launch and the Moodle registration: see the troubleshooting of
 
 ## 11. Later: production
 
-Running Teamable for the HTWG Moodle with real student data is a separate step. The detailed, earlier plan is the [Production plan (draft)](production-plan.md); it uses a different container setup, but its code snippets and commands can be reused. In short:
-
-- **Separate environment:** own VM (or at least its own Compose project), own host name. Do not mix test and real data.
-- **Own Compose file without Moodle:** no `moodle`, `moodle-db` and `moodle-cron`; the backend talks to the HTWG Moodle.
-- **Who must reach Teamable?** The frontend calls the API from the browser. If teachers open Teamable from Moodle at home without VPN, production has to be reachable from the internet, with the hardening below. Then Let's Encrypt is also possible.
-- **Changes in `teamable-backend`** before real data:
-    - merge the Moodle support into `master` with a linear migration history and deploy tags
-    - `SECRET_KEY` from the environment instead of hard-coded in `settings.py`
-    - remove the committed Postgres password (`db.env`) and the UBC API key from the code; both stay in the Git history and count as public
-    - health endpoint `/health/` with a database check
-    - `SESSION_COOKIE_SECURE`/`CSRF_COOKIE_SECURE`, switchable via an environment variable: set fixed whenever `DEBUG` is off, they break the local stack with `DEBUG=FALSE` over `http://` (the browser does not send the cookies, the admin login fails); then `manage.py check --deploy`
-    - a `.dockerignore`, so that the image does not contain `src/lti/config/` with the private key
-    - a supported Python version instead of 3.10
-- **Operations:** daily Postgres dumps with a copy outside the VM, a tested restore, updates tested on the development VM first, monitoring of the health endpoint.
-- **Backup of secrets:** `.env` and the LTI key pair, stored encrypted or in another protected place. Without the key pair, the tool has to be registered in Moodle again after losing the VM.
-- **Data protection:** clarify the processing of student data (names, courses, teams) with the data protection officer of the HTWG before going live, e.g. entry in the record of processing activities and deletion periods.
-- **Logs:** after the LTI launch the backend redirects to `/authenticate?token=…`. The token ends up in the access logs; treat them as confidential, or move the token out of the URL.
-- **Moodle side:** the RZ registers the tool in the HTWG Moodle with the production URLs (same fields as in section 7).
+Running Teamable for the HTWG Moodle with real student data is a separate step with the same setup: own VM, the HTWG Moodle as platform (whether an own test Moodle stays is open), a tagged backend version with the open security changes (`SECRET_KEY`, credentials, health endpoint, secure cookies, `.dockerignore`), backups and a data protection check. Details, open decisions and the go-live checklist: [Production plan (draft)](production-plan.md).
