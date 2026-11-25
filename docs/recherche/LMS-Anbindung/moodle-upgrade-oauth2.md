@@ -1,7 +1,7 @@
 # Teams aus Teamable als Gruppen in Moodle
 
 !!! info "Stand"
-    23. November 2026, HTWG-Moodle 4.5. Geprüft gegen die Moodle-Doku, den Moodle-Code (Branches `MOODLE_405_STABLE` und `MOODLE_503_STABLE`) und die IMS-Spezifikationen. Aussagen ohne Kennzeichnung sind mit dem verlinkten Beleg gestützt. Eigene Schlüsse sind mit *Rückschluss* markiert.
+    25. November 2026, HTWG-Moodle 4.5. Geprüft gegen die Moodle-Doku, den Moodle-Code (Branches `MOODLE_405_STABLE` und `MOODLE_503_STABLE`) und die IMS-Spezifikationen. Aussagen ohne Kennzeichnung sind mit dem verlinkten Beleg gestützt. Eigene Schlüsse sind mit *Rückschluss* markiert.
 
     Verwandte Seiten: [Moodle-API](moodle-api.md), [Moodle-Token: kritische Punkte](moodle-api-key-problem.md).
 
@@ -35,9 +35,11 @@ Kurz: Für jeden automatischen Weg braucht Teamable entweder ein Web-Service-Tok
 |---|---|---|---|---|---|
 | A | Web Service + Token der Lehrperson | ja | Dienst anlegen, `createtoken` und `rest:use` auf Systemebene vergeben | Rechte auf Systemebene; dauerhaft gültiges Token in der Teamable-Datenbank | **empfohlen** |
 | B | Token über `login/token.php` mit dem Moodle-Passwort | ja | wie A (Dienst, `createtoken`, `rest:use`) | Teamable verarbeitet das Moodle-Passwort | **zweitbeste Option** |
+| B2 | Wie B, aber im Browser: Token nur im Frontend, nicht in der Datenbank | ja | wie A | Moodle-Passwort wird weiterhin auf einer Teamable-Seite eingegeben | **ersetzt B**, falls `token.php` genutzt wird |
 | C | CSV aus Teamable + Plugin `local_groupimport` | halb (Lehrperson lädt Datei hoch) | Plugin installieren und pflegen | Fremd-Plugin; ein Schritt von Hand | **Alternative ohne Token** |
 | D | Eigenes LTI-Plugin, das Gruppen schreibt | ja | eigenen Code installieren und pflegen | kein Standard, Pflege bei jedem Upgrade | keine Option: zu aufwändig |
 | E | Browser-Erweiterung bedient die Moodle-Seiten | ja | nichts | fragil, Installation bei jeder Lehrperson | Notlösung |
+| E2 | Bookmarklet bedient die Moodle-Seiten | ja (ein Klick im Kurs) | nichts | fragil wie E, evtl. durch CSP blockiert | Notlösung, für einen Pilot leichter als E |
 | F | CSV-Import mit Moodle-Bordmitteln | nein | nichts | nur Gruppennamen, Zuordnung von Hand | Rückfallebene |
 | G | Upgrade auf 5.3 + OAuth2 | – | Upgrade | keine Gruppen-Endpunkte in der neuen REST API | **gleiches Problem wie heute** |
 
@@ -105,6 +107,36 @@ Belege: `login/token.php` verlangt `username`, `password` und `service`, meldet 
 - **Gleiche Voraussetzungen wie Lösungsweg A:** Dienst, `createtoken` und `rest:use` auf Systemebene.
 - **Erneute Eingabe:** Nach Ablauf des Tokens muss die Lehrperson ihr Passwort erneut eingeben.
 
+## B2. Token über `login/token.php` im Browser (nur im Frontend)
+
+**Ablauf**
+
+1. Wie bei Lösungsweg A legt das RZ den Dienst „Teamable“ an.
+2. Die Lehrperson klickt in Teamable auf „Nach Moodle exportieren“ und gibt ihren Moodle-Benutzernamen und ihr Passwort ein.
+3. Das JavaScript im Browser schickt beides **direkt** an `login/token.php` (mit `service=teamable`). Das Teamable-Backend sieht weder Passwort noch Token.
+4. Moodle antwortet mit `token` und `privatetoken`. Das Frontend verwirft `privatetoken` sofort und hält `token` nur im Arbeitsspeicher (JS-Variable, kein `localStorage`, kein Cookie).
+5. Das Frontend prüft mit `core_webservice_get_site_info`, ob die Moodle-Nutzer-ID zur Person aus dem LTI-Launch passt.
+6. Das Frontend holt die Teams (mit Moodle-Nutzer-IDs) vom Teamable-Backend und ruft die Gruppenfunktionen direkt bei Moodle auf (`webservice/rest/server.php`).
+
+Belege: Beide Endpunkte erlauben Aufrufe von fremden Domains. `login/token.php` sendet `Access-Control-Allow-Origin: *` ([login/token.php 4.5](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/login/token.php)), der REST-Server ebenfalls, mit dem Kommentar *„This allow to receive requests done by Web Workers or webapps in different domains.“* ([webservice/rest/locallib.php 4.5](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/webservice/rest/locallib.php), Funktion `send_headers`). Existiert für Person und Dienst schon ein gültiges Token, gibt `token.php` dasselbe Token zurück, statt ein neues zu erzeugen. ([util.php 4.5](https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/lib/external/classes/util.php), Funktion `generate_token_for_current_user`) Im Quellcode geprüft, noch nicht aus dem Browser getestet.
+
+**Vorteile gegenüber B**
+
+- **Kein Passwort auf dem Teamable-Server.** Es geht vom Browser direkt zu Moodle und landet nicht in Logs, Fehlerberichten oder Proxys von Teamable.
+- **Kein Token in der Teamable-Datenbank.** *Rückschluss:* Teamable ist kein lohnendes Angriffsziel mehr (keine Sammlung von Tokens aller Lehrenden). Verschlüsselung, Schlüsselverwaltung, „Token löschen“ und die Behandlung von `invalidtoken` für gespeicherte Tokens entfallen.
+- **Weniger Abstimmung mit dem Datenschutz:** Das Backend verarbeitet weder Passwort noch Token.
+
+**Probleme**
+
+- **Das Passwort-Problem von B bleibt.** Für die Lehrperson sieht es genauso aus: ein Passwortfeld auf einer fremden Seite. *Rückschluss:* Das JavaScript stammt von Teamable. Bei einer XSS-Lücke, einem manipulierten npm-Paket oder Deployment könnte es das Passwort mitlesen. Auch der Gewöhnungseffekt bleibt. RZ und Datenschutz werden voraussichtlich ähnlich skeptisch sein wie bei B.
+- **„Nur im Browser“ heißt nicht „weg“.** Moodle speichert das Token in seiner Datenbank, und es bleibt bis zum Ablauf (standardmäßig 12 Wochen) gültig, auch wenn der Tab geschlossen wird. Wer es aus dem Browser stiehlt (z. B. per XSS), kann es genauso nutzen.
+- **Export hängt am offenen Tab.** Die Aufrufe laufen nacheinander im Browser. Wird der Tab mittendrin geschlossen, bleiben halb angelegte Gruppen zurück (siehe „Keine Transaktion“ bei A). Kein Export im Hintergrund, keine Wiederholung durch den Server.
+- **Zweiter Codepfad.** Der Canvas-Export läuft im Backend (Python), der Moodle-Export läge im Frontend (TypeScript).
+- **Häufigere Eingabe:** Das Passwort wird bei jeder Export-Sitzung (nach jedem Neuladen) erneut abgefragt, nicht nur alle 12 Wochen.
+- **Gleiche Voraussetzungen wie Lösungsweg A:** Dienst, `createtoken` und `rest:use` auf Systemebene.
+
+*Rückschluss:* B2 ist in fast allen Punkten besser als B. Wenn `token.php` genutzt wird, dann in dieser Form. Gegenüber A bleibt die Abwägung: kein Passwort, dafür ein dauerhaft gültiges Token in der Teamable-Datenbank (A), oder kein Token bei Teamable, dafür ein Passwortfeld (B2).
+
 ## C. CSV aus Teamable + Plugin `local_groupimport`
 
 **Ablauf**
@@ -159,7 +191,54 @@ Web Services aus der Sitzung aufzurufen geht nicht, weil die Gruppenfunktionen d
 - **Anzahl der Aufrufe:** Pro Team etwa zwei Seitenaufrufe (anlegen, Mitglieder zuordnen), bei 20 Teams also etwa 40.
 - **Verteilung und Installation:** Die Erweiterung müsste über die Erweiterungs-Stores von Chrome und Firefox veröffentlicht oder von Hand installiert werden. Jede Lehrperson muss sie installieren; auf dienstlichen Geräten ist das evtl. gesperrt.
 - **Akzeptanz:** Das RZ könnte es als Umgehung sehen; offen ansprechen.
-- Vorteil: der einzige automatische Weg ganz ohne RZ. Die Erweiterung kann nur, was die Lehrperson auch von Hand darf.
+- Vorteil: der einzige automatische Weg ganz ohne RZ, ohne Token-Speicherung und ohen Moodle Daten Eingabe. Die Erweiterung kann nur, was die Lehrperson auch von Hand darf.
+
+## E2. Bookmarklet
+
+Ein Bookmarklet ist ein Lesezeichen, dessen Adresse nicht `https://…`, sondern `javascript:…` ist. Beim Anklicken führt der Browser den Code **auf der gerade offenen Seite** aus. Auf der Moodle-Seite heißt das: mit der Sitzung der Lehrperson und dem Sitzungsschlüssel (`M.cfg.sesskey`), als hätte Moodle den Code selbst geladen. Das Bookmarklet macht also dasselbe wie die Erweiterung (Schritte 2 und 3 bei Lösungsweg E), nur ohne Installation.
+
+Der gesamte Code steckt im Lesezeichen selbst; es wird nichts nachgeladen:
+
+```
+javascript:(async()=>{const s=M.cfg.sesskey; /* Gruppen anlegen, Mitglieder zuordnen … */})()
+```
+
+**Ablauf**
+
+1. Teamable zeigt einen Link `<a href="javascript:(…)">Teams nach Moodle</a>`. Die Lehrperson zieht ihn einmal in ihre Lesezeichenleiste; der Browser speichert dabei den Code.
+2. Die Lehrperson öffnet in Teamable den Export. Die Teams werden übergeben (siehe „Woher kommen die Teams?“).
+3. Im Moodle-Kurs klickt sie auf das Lesezeichen. Der Code legt die Gruppen über `group/group.php` an und ordnet die Mitglieder über `group/members.php` zu.
+
+**Eigenschaften**
+
+- **Fester Code:** Es läuft nur der Code, den die Lehrperson beim Reinziehen gespeichert hat. Für ein Update muss sie das Lesezeichen neu ziehen.
+- **Klein:** Der Code muss minifiziert in die Adresse passen.
+
+**Woher kommen die Teams?**
+
+Der Code läuft als Moodle-Seite und kann nicht einfach die Teamable-Anmeldung nutzen.
+
+- **Zwischenablage:** Teamable kopiert die Teams (mit Moodle-Nutzer-IDs) als JSON; das Bookmarklet liest sie ein. Einfach, aber ein Handgriff mehr.
+- **Einmal-ID in der Adresse:** Der Export-Button in Teamable öffnet den Moodle-Kurs mit `#teamable=<einmal-id>`. Das Bookmarklet liest die ID und holt die Teams damit bei Teamable ab. Die ID gilt kurz und nur einmal; Teamable muss dafür CORS für die Moodle-Domain erlauben. Das ist kein Moodle-Token, nur ein Abholschein für die Teamdaten.
+
+**Unterschied zur Erweiterung**
+
+| | Erweiterung | Bookmarklet |
+|---|---|---|
+| Einrichten | Über Chrome Web Store / Firefox Add-ons (mit Prüfung) | Link in die Lesezeichenleiste ziehen |
+| Auf Dienstgeräten | Oft per Richtlinie gesperrt | Selten gesperrt |
+| Start | Kann selbst einen Button auf Moodle-Seiten einblenden | Nur per Klick auf das Lesezeichen |
+| Teams von Teamable holen | Einfach, darf Anfragen an beide Seiten ohne CORS-Grenzen schicken | Umständlicher (siehe oben) |
+| Updates | Automatisch über den Store | Lesezeichen neu ziehen |
+| Content Security Policy (CSP) der Seite | Gilt für die Erweiterung weitgehend nicht | Kann blockieren |
+| Bauaufwand | Höher (Manifest V3, Veröffentlichung, Chrome und Firefox) | Gering (eine JS-Datei) |
+| Zugriff | Dauerhaft auf die freigegebenen Seiten | Nur im Moment des Klicks |
+
+**Gleich wie bei der Erweiterung:** kein RZ, kein Token, kein Passwort; kann nur, was die Lehrperson auch von Hand darf; fragil bei Moodle-Updates; Akzeptanz beim RZ offen.
+
+*Rückschluss:* Für einen Prototyp oder Pilot mit wenigen Lehrenden reicht ein Bookmarklet (schnell gebaut, sofort nutzbar). Für den Dauerbetrieb ist die Erweiterung bequemer und unabhängig von der CSP.
+
+**Offen:** Ob die HTWG-Moodle eine CSP setzt, die Bookmarklets blockiert. Lässt sich mit einem harmlosen Test-Bookmarklet an der HTWG prüfen. Lokal noch nicht getestet.
 
 ## F. CSV-Import mit Moodle-Bordmitteln
 
@@ -221,12 +300,13 @@ Quelle: [Moodle releases](https://moodledev.io/general/releases#version-support)
 1. **Lösungsweg A (erste Wahl)** beim RZ anfragen: Dienst „Teamable“ anlegen. Vorher klären, ob Lehrende `moodle/webservice:createtoken` und `webservice/rest:use` auf Systemebene schon haben.
     - Für den Dienst **nur die Gruppenfunktionen** beantragen (`core_group_create_groupings`, `core_group_create_groups`, `core_group_assign_grouping`, `core_group_add_group_members`). *Rückschluss:* Ein gestohlenes Token könnte dann keine Noten oder Umfrageantworten lesen.
 2. Das Token verschlüsselt in der Teamable-Datenbank speichern und nur für den per LTI gestarteten Kurs verwenden.
-3. **Lösungsweg B (zweitbeste Option):** Token über `login/token.php` mit dem Moodle-Passwort.
+3. **Lösungsweg B (zweitbeste Option):** Token über `login/token.php` mit dem Moodle-Passwort, umgesetzt als **B2** (nur im Browser, ohne Speicherung in der Teamable-Datenbank).
 4. **Lösungsweg C:** Plugin `local_groupimport` vorschlagen.
-5. Ohne RZ bleibt **F** als Rückfallebene; **E** nur, wenn das RZ einverstanden ist.
+5. Ohne RZ bleibt **F** als Rückfallebene; **E** oder **E2** nur, wenn das RZ einverstanden ist.
 6. **Lösungsweg D** (eigenes LTI-Plugin) verfolgen wir nicht: zu aufwändig.
 
 - [ ] Beim RZ klären: Sind `createtoken` und `rest:use` für Lehrende auf Systemebene vergeben? Wird der Dienst „Teamable“ angelegt?
 - [ ] Falls nicht: Kann `local_groupimport` installiert werden? Pflege und Lizenz auf moodle.org prüfen.
 - [ ] Speicherung des Tokens mit dem Datenschutz der HTWG abstimmen.
 - [ ] Optional: SwaggerUI einer 5.3-Testinstanz auf Gruppen-Endpunkte prüfen.
+- [ ] Optional: Mit einem harmlosen Test-Bookmarklet prüfen, ob die HTWG-Moodle eine CSP setzt, die Bookmarklets blockiert.
