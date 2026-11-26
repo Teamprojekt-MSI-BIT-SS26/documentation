@@ -40,7 +40,7 @@ flowchart LR
     WEB -->|"HTTPS: certs.php, token.php, NRPS"| HM
 ```
 
-The gateway does the path routing as on the dev VM ([local setup with Docker](dev-stack.md#the-gateway)): backend paths to `web`, everything else to `frontend`, one origin, no CORS.
+The gateway does the path routing as on the dev VM ([local setup with Docker](local-docker-setup.md#the-gateway)): backend paths to `web`, everything else to `frontend`, one origin, no CORS.
 
 | | Dev VM | Production |
 |---|---|---|
@@ -305,7 +305,7 @@ Container logs are limited by `/etc/docker/daemon.json` (VM setup, section 2). T
 
 ## 8. Troubleshooting
 
-Errors that only occur in production. For everything else, see the troubleshooting of the [VM setup](vm-setup.md#troubleshooting) and the [local setup with Docker](dev-stack.md#troubleshooting).
+Errors that only occur in production. For everything else, see the troubleshooting of the [VM setup](vm-setup.md#troubleshooting) and the [local setup with Docker](local-docker-setup.md#troubleshooting).
 
 | Symptom | Cause / solution |
 |---|---|

@@ -1,11 +1,11 @@
 # Set up the HTWG VM
 
 !!! info "What this is about"
-    Step-by-step setup and operation of the dev instance on the HTWG VM: Teamable (frontend and backend) and an own Moodle 4.5 with test data, behind HTTPS, reachable via the HTWG VPN. It runs the Teamable dev stack; how the stack works is explained in [Local setup with Docker](dev-stack.md#6-how-the-stack-works).
+    Step-by-step setup and operation of the dev instance on the HTWG VM: Teamable (frontend and backend) and an own Moodle 4.5 with test data, behind HTTPS, reachable via the HTWG VPN. It runs the Teamable dev stack; how the stack works is explained in [Local setup with Docker](local-docker-setup.md#6-how-the-stack-works).
 
     The VM is used to test the LTI launch and the student import on a server, to show Teamable to others and to try out Moodle versions (e.g. 5.3 for the RZ). It holds **test data only**. Production with real student data builds on this setup: [Production plan (draft)](production-plan.md).
 
-    This page lists the commands in the order that works. The [local setup with Docker](dev-stack.md) uses the same stack and refers to sections 7 and 9 to 13 of this page.
+    This page lists the commands in the order that works. The [local setup with Docker](local-docker-setup.md) uses the same stack and refers to sections 7 and 9 to 13 of this page.
 
 | | Value |
 |---|---|
@@ -714,4 +714,4 @@ The VM only has test data, so there are no regular backups. Moodle (`moodledata`
 | `web` cannot reach Moodle (`certs.php`, import) | Firewall on the VM (e.g. `ufw`) blocks connections from the Docker bridge to port 443 of the host. Allow 443 for the Docker networks |
 | `password authentication failed` / `Access denied` in the database logs | Password in `.env` differs from the one used when the volume was created (section 4) |
 | Disk full | Docker build cache and old images: `docker system prune` (never with `--volumes`, that deletes the data) |
-| More errors | [local setup with Docker](dev-stack.md#troubleshooting), [local setup](../../recherche/LMS-Anbindung/local-moodle-teamable-setup.md#troubleshooting) |
+| More errors | [local setup with Docker](local-docker-setup.md#troubleshooting), [local setup](../../recherche/LMS-Anbindung/local-moodle-teamable-setup.md#troubleshooting) |

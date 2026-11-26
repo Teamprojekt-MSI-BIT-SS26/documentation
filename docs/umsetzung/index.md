@@ -10,6 +10,6 @@ Ergebnisse aus der Umsetzungsphase.
 
 ## Deployment
 
-- [Local setup with Docker](Deployment/dev-stack.md)
+- [Local setup with Docker](Deployment/local-docker-setup.md)
 - [Set up the HTWG VM](Deployment/vm-setup.md)
 - [Production plan (draft)](Deployment/production-plan.md)
