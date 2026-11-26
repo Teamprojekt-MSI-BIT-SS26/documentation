@@ -11,7 +11,7 @@
 | Teamable | `https://teamable-analytics.in.htwg-konstanz.de` |
 | Moodle | `https://moodle-teamable-analytics.in.htwg-konstanz.de` |
 | Stack | `/opt/teamable/teamable-dev-stack` |
-| TLS files | `/etc/ssl/teamable/` |
+| TLS files (from the RZ) | `/etc/ssl/certs/<host>.pem`, `/etc/ssl/private/<host>.key` |
 
 ```mermaid
 flowchart LR
@@ -51,6 +51,7 @@ From the RZ:
 - the VM with SSH access and `sudo` rights
 - DNS for both host names on `141.37.22.162`
 - firewall: inbound 22, 80 and 443 from the VPN; outbound HTTPS and DNS (for `apt`, Docker Hub, GitHub)
+- TLS certificates for both host names, stored on the VM (5.1). If they take longer, start with a temporary certificate (5.2)
 
 Connect to the HTWG VPN, then log in via SSH. All commands below run on the VM.
 
@@ -156,35 +157,44 @@ TEAMABLE_HOST=teamable-analytics.in.htwg-konstanz.de
 MOODLE_HOST=moodle-teamable-analytics.in.htwg-konstanz.de
 ```
 
-### 5.1 Key and CSR
+### 5.1 Certificates from the RZ
+
+The RZ creates the key and the certificate for each host name itself and stores them on the VM; no CSR is needed. It renews them automatically at the same place:
+
+| File | Content |
+|---|---|
+| `/etc/ssl/certs/<host>.pem` | certificate including the intermediate chain |
+| `/etc/ssl/private/<host>.key` | private key (`root`, `600`) |
+
+Check whether they are there:
+
+```bash
+for H in "$TEAMABLE_HOST" "$MOODLE_HOST"; do
+  echo "== $H"
+  openssl x509 -in /etc/ssl/certs/$H.pem -noout -subject -issuer -enddate -ext subjectAltName
+  grep -c 'BEGIN CERTIFICATE' /etc/ssl/certs/$H.pem      # 2 or more: chain included
+  sudo ls -l /etc/ssl/private/$H.key
+done
+```
+
+Expected: issuer `GEANT TLS ECC 1`, the own host name in the SAN, and a key file for each name. If both certificates are there, skip 5.2, 8.1 and section 14.
+
+The folders `/etc/ssl/certs` and `/etc/ssl/private` belong to the RZ: do not store any own files there.
+
+### 5.2 Temporary self-signed certificate
+
+Only while the RZ certificates are not there yet: nginx needs a certificate to start. Create one for both host names in an own folder:
 
 ```bash
 sudo mkdir -p /etc/ssl/teamable && cd /etc/ssl/teamable
-sudo openssl req -new -newkey rsa:3072 -nodes \
-  -keyout teamable-dev.key -out teamable-dev.csr \
+sudo openssl req -x509 -newkey rsa:3072 -nodes -days 90 \
+  -keyout teamable-dev.key -out teamable-dev.pem \
   -subj "/CN=$TEAMABLE_HOST" \
   -addext "subjectAltName=DNS:$TEAMABLE_HOST,DNS:$MOODLE_HOST"
 sudo chmod 600 teamable-dev.key
 ```
 
-Send `teamable-dev.csr` (not the key) to the RZ and ask for a server certificate for both names, including the intermediate chain:
-
-```bash
-cat /etc/ssl/teamable/teamable-dev.csr
-```
-
-### 5.2 Temporary self-signed certificate
-
-Until the RZ certificate arrives, nginx needs a certificate to start. Skip this step if the certificate from the RZ is already there: store it (including the intermediate chain) as `/etc/ssl/teamable/teamable-dev.fullchain.pem` instead.
-
-```bash
-cd /etc/ssl/teamable
-sudo openssl req -x509 -days 90 -key teamable-dev.key -out teamable-dev.fullchain.pem \
-  -subj "/CN=$TEAMABLE_HOST" \
-  -addext "subjectAltName=DNS:$TEAMABLE_HOST,DNS:$MOODLE_HOST"
-```
-
-Browsers show a certificate warning; accept it for both host names. Check the expiry date with `sudo openssl x509 -in teamable-dev.fullchain.pem -noout -enddate`.
+Browsers show a certificate warning; accept it for both host names. Check the expiry date with `sudo openssl x509 -in teamable-dev.pem -noout -enddate`. Switch to the RZ certificates as soon as they arrive (section 14).
 
 ---
 
@@ -196,14 +206,29 @@ sudo cp teamable-proxy.conf /etc/nginx/snippets/teamable-proxy.conf
 sudo cp host-nginx.conf /etc/nginx/sites-available/teamable-dev
 sudo sed -i "s/<teamable-host>/$TEAMABLE_HOST/g; s/<moodle-host>/$MOODLE_HOST/g" \
   /etc/nginx/sites-available/teamable-dev
+```
+
+`host-nginx.conf` is used unchanged; `sed` only fills in the host names. Each HTTPS server uses the RZ certificate of its host name (5.1).
+
+**Only with the temporary certificate from 5.2:** point both servers to it instead:
+
+```bash
+sudo sed -i -E \
+  -e 's|/etc/ssl/certs/[^;]+\.pem|/etc/ssl/teamable/teamable-dev.pem|' \
+  -e 's|/etc/ssl/private/[^;]+\.key|/etc/ssl/teamable/teamable-dev.key|' \
+  /etc/nginx/sites-available/teamable-dev
+```
+
+Check which certificates nginx uses, then enable the site:
+
+```bash
+grep -n 'ssl_certificate' /etc/nginx/sites-available/teamable-dev
 
 sudo ln -sf /etc/nginx/sites-available/teamable-dev /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl reload nginx
 sudo systemctl enable nginx
 ```
-
-`host-nginx.conf` is used unchanged; `sed` only fills in the host names.
 
 ---
 
@@ -239,21 +264,21 @@ The first build takes several minutes. Then create the admin account for Teamabl
 docker compose exec web python manage.py createsuperuser
 ```
 
-Health check: Teamable answers via HTTPS (must print `200`). `-k` is only needed while the temporary certificate from 5.2 is in use:
+Health check: Teamable answers via HTTPS (must print `200`). With the temporary certificate from 5.2, add `-k`:
 
 ```bash
-curl -k -s -o /dev/null -w '%{http_code}\n' "https://$TEAMABLE_HOST/admin/login/"
+curl -s -o /dev/null -w '%{http_code}\n' "https://$TEAMABLE_HOST/admin/login/"
 ```
 
 ### 8.1 Let `web` trust the temporary certificate
 
 !!! warning "Only with the self-signed certificate"
-    This step is only needed while the temporary self-signed certificate from 5.2 is in use. Skip it if the certificate from the RZ is already installed: `web` trusts its chain without a CA bundle. When the RZ certificate replaces the temporary one later, undo this step (section 14).
+    This step is only needed while the temporary self-signed certificate from 5.2 is in use. Skip it if nginx already uses the RZ certificates: `web` trusts their chain without a CA bundle. When you switch to the RZ certificates later, undo this step (section 14).
 
 With the self-signed certificate from 5.2, the backend cannot fetch `certs.php` from Moodle; the LTI launch fails with `500` and `CERTIFICATE_VERIFY_FAILED` in `docker compose logs web`. Give `web` a CA bundle that contains the certificate:
 
 ```bash
-sudo sh -c 'cat /etc/ssl/certs/ca-certificates.crt /etc/ssl/teamable/teamable-dev.fullchain.pem > /etc/ssl/teamable/ca-bundle-dev.pem'
+sudo sh -c 'cat /etc/ssl/certs/ca-certificates.crt /etc/ssl/teamable/teamable-dev.pem > /etc/ssl/teamable/ca-bundle-dev.pem'
 sudo chmod 644 /etc/ssl/teamable/ca-bundle-dev.pem
 
 cd /opt/teamable/teamable-dev-stack
@@ -290,7 +315,7 @@ cd /opt/teamable/teamable-dev-stack
 docker compose ps moodle moodle-db     # moodle "running", moodle-db "healthy"
 ```
 
-Then open **`https://moodle-teamable-analytics.in.htwg-konstanz.de`** in the browser (with VPN) and accept the certificate warning (temporary certificate from 5.2). Always use exactly this address: Moodle only accepts its `MOODLE_URL` from `.env`.
+Then open **`https://moodle-teamable-analytics.in.htwg-konstanz.de`** in the browser (with VPN). With the temporary certificate from 5.2, accept the certificate warning. Always use exactly this address: Moodle only accepts its `MOODLE_URL` from `.env`.
 
 The database settings and the paths come from `moodle-config.php` of the stack, so the wizard does not ask for them. It starts directly with the installation:
 
@@ -519,7 +544,7 @@ In the Teamable admin (`https://teamable-analytics.in.htwg-konstanz.de/admin/`),
 
 | Problem | Cause / solution |
 |---|---|
-| Launch: `500`, log: `CERTIFICATE_VERIFY_FAILED` | With the self-signed certificate: workaround from 8.1 missing. With the RZ certificate: chain in `teamable-dev.fullchain.pem` incomplete (section 14) |
+| Launch: `500`, log: `CERTIFICATE_VERIFY_FAILED` | nginx uses the temporary certificate from 5.2, but the workaround from 8.1 is missing. Check with `grep ssl_certificate /etc/nginx/sites-available/teamable-dev` |
 | Launch: `IntegrityError … organization` | organization missing (12.1); create it and start the activity again from the course |
 | `iss … [client_id=…] not found in settings` | Platform ID or Client ID in `lti_config_settings.json` does not match Moodle exactly (sections 10 and 11) |
 | `Missing canvas_course_id/canvas_user_id custom claims` | custom parameters of the Moodle tool missing or incomplete (section 10) |
@@ -531,21 +556,45 @@ In the Teamable admin (`https://teamable-analytics.in.htwg-konstanz.de/admin/`),
 
 ---
 
-## 14. When the RZ certificate arrives
+## 14. Switch to the RZ certificates
 
-Store it (including the intermediate chain) as `/etc/ssl/teamable/teamable-dev.fullchain.pem`, then remove the workaround from 8.1:
+Only if the VM was set up with the temporary certificate from 5.2. As soon as the RZ certificates are there (check from 5.1), set the host names as in section 5 and copy the nginx configuration again, this time without redirecting it to the temporary certificate:
 
 ```bash
-sudo nano /etc/ssl/teamable/teamable-dev.fullchain.pem     # paste certificate + chain
+F=/etc/nginx/sites-available/teamable-dev
+sudo cp /etc/nginx/sites-available/teamable-dev /root/teamable-dev.nginx.bak
+sudo cp /opt/teamable/teamable-dev-stack/host-nginx.conf $F
+sudo sed -i "s/<teamable-host>/$TEAMABLE_HOST/g; s/<moodle-host>/$MOODLE_HOST/g" $F
+grep -n 'ssl_certificate' $F         # only /etc/ssl/certs/… and /etc/ssl/private/…
 sudo nginx -t && sudo systemctl reload nginx
-
-cd /opt/teamable/teamable-dev-stack
-rm docker-compose.override.yml
-sudo rm /etc/ssl/teamable/ca-bundle-dev.pem
-docker compose up -d web
 ```
 
-Check that the browser no longer warns, that the health check from section 8 prints `200` without `-k`, and that the check from 8.1 still prints `200`.
+If `nginx -t` fails, restore the old configuration with `sudo cp /root/teamable-dev.nginx.bak $F`.
+
+Check that both host names answer without `-k` (must print `200`):
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' "https://$TEAMABLE_HOST/admin/login/"
+curl -s -o /dev/null -w '%{http_code}\n' "https://$MOODLE_HOST/login/index.php"
+```
+
+Then remove the workaround from 8.1 and check that `web` trusts the RZ certificate on its own (must print `200`):
+
+```bash
+cd /opt/teamable/teamable-dev-stack
+rm docker-compose.override.yml
+docker compose up -d web
+docker compose exec web python -c "import requests; print(requests.get('https://$MOODLE_HOST/mod/lti/certs.php').status_code)"
+```
+
+Start the activity in Moodle once more (section 13); the browser no longer shows a certificate warning. Then delete the temporary files:
+
+```bash
+sudo rm -r /etc/ssl/teamable
+sudo rm /root/teamable-dev.nginx.bak
+```
+
+The RZ renews the certificates in place. nginx only reads the renewed files after `sudo systemctl reload nginx`; whether the renewal by the RZ does that is still open.
 
 ---
 
@@ -553,8 +602,8 @@ Check that the browser no longer warns, that the health check from section 8 pri
 
 | Symptom | Cause / solution |
 |---|---|
-| `nginx -t`: `cannot load certificate` | `teamable-dev.fullchain.pem` missing: create the temporary certificate (5.2) |
+| `nginx -t`: `cannot load certificate` | The file named in `ssl_certificate` does not exist. RZ certificates not there yet: create the temporary certificate (5.2) and point nginx to it (section 6) |
 | `openssl genrsa`: `Permission denied` in `lti/config` | The folder belongs to `root`, because the stack was started before it existed. `sudo chown -R "$USER":"$USER" lti/config` in `teamable-backend/src`, then create the keys again |
 | LTI launch `500`, log: `CERTIFICATE_VERIFY_FAILED … self-signed certificate` | Only with the self-signed certificate: workaround from 8.1 missing or `web` not recreated (`docker compose up -d web`) |
-| LTI launch `500`, log: `CERTIFICATE_VERIFY_FAILED … unable to get local issuer certificate` | With the RZ certificate: intermediate chain missing in `teamable-dev.fullchain.pem` (section 14) |
+| LTI launch `500`, log: `CERTIFICATE_VERIFY_FAILED … unable to get local issuer certificate` | The certificate file nginx uses lacks the intermediate chain. The RZ files contain it (check in 5.1); ask the RZ if `grep -c` prints `1` |
 | More errors | [VM guide](backend-htwg-vm.md#10-troubleshooting), [dev stack](dev-stack.md#troubleshooting), [local setup](../../recherche/LMS-Anbindung/local-moodle-teamable-setup.md#troubleshooting) |
