@@ -44,7 +44,7 @@ Points worth knowing:
 
 `gateway` is a plain `nginx:1.28` container with `gateway.conf.template` as its configuration. It is part of this stack, not of the backend or frontend repository. The stack only builds the `Dockerfile` of the backend and does not use its `docker-compose.yml` with its own nginx.
 
-It puts frontend and backend behind **one origin**: backend paths (`/api/`, `/admin/`, `/lti/`, `/oauth/`, `/health/` once the backend has it) go to `web:8000`, `/static/` is served from the volume `backend-static` (CSS of the Django admin), everything else goes to `frontend:3000`. With one origin there is no CORS, and the redirect from the backend to the frontend after the LTI launch stays on the same host.
+It puts frontend and backend behind **one origin**: backend paths (`/api/`, `/admin/`, `/lti/`, `/oauth/`) go to `web:8000`, `/static/` is served from the volume `backend-static` (CSS of the Django admin), everything else goes to `frontend:3000`. With one origin there is no CORS, and the redirect from the backend to the frontend after the LTI launch stays on the same host.
 
 The backend prefixes are fixed in `gateway.conf.template`. A backend route with a new prefix (e.g. `/auth/…`) ends up in the frontend and gets a `404` from Next.js until the `location` for the backend is extended. The other way round, the frontend must not use pages under these prefixes.
 

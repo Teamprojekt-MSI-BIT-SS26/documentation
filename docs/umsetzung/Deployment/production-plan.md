@@ -122,26 +122,6 @@ if not SECRET_KEY:
 
 **Credentials in the repository.** `db.env` contains a Postgres password, and `src/app/services/team_generation.py` a commented-out UBC API key. Remove both (`git mv db.env db.env.sample`, `db.env` into `.gitignore`). They stay in the Git history and count as public; inform the owner of the UBC API if the key is still valid. The stack does not use `db.env`; production gets its own random password in `.env`.
 
-**Health endpoint.** The gateway already routes `/health/` to the backend.
-
-```python
-# src/teamable/urls.py
-from django.db import connection
-from django.http import JsonResponse
-
-
-def health(request):
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT 1")
-    return JsonResponse({"status": "ok"})
-
-
-urlpatterns = [
-    path("health/", health),
-    # ... existing entries
-]
-```
-
 **Secure cookies, switchable.** Session and CSRF cookies are also sent over HTTP. Setting them fixed whenever `DEBUG` is off breaks the local stack with `DEBUG=FALSE` over `http://` (the browser does not send the cookies back, the admin login fails). Proposal:
 
 ```python
@@ -232,9 +212,6 @@ No `MOODLE_*` variables. New random values, never the ones of the dev VM.
 In addition to the checks of the VM guide:
 
 ```bash
-# from your own machine
-curl -i https://<prod-host>/health/              # 200, {"status": "ok"}
-
 # on the VM
 cd /opt/teamable/teamable-dev-stack
 docker compose exec web python manage.py check --deploy
@@ -257,7 +234,6 @@ git -C teamable-backend fetch --tags && git -C teamable-backend checkout <new-ta
 git -C teamable-frontend fetch --tags && git -C teamable-frontend checkout <new-tag>
 docker compose up -d --build        # migrations run automatically on start
 docker compose logs -f web
-curl -s https://<prod-host>/health/
 ```
 
 **Rollback:** check out the previous tags and rebuild. If the new version has run migrations, the old code may not work with the new schema; then restore the backup from before the update.
@@ -300,7 +276,6 @@ Also keep `.env` and the LTI key pair (`teamable-backend/src/lti/config/`) encry
 
 ### 6.3 Monitoring
 
-- `https://<prod-host>/health/` checked regularly from outside the VM (tool to be decided, e.g. a monitoring service of the RZ)
 - expiry date of the certificate; renewal of an RZ certificate is manual
 - free disk space (Docker build cache: `docker system prune`, never with `--volumes`)
 
@@ -318,7 +293,6 @@ Container logs are limited by `/etc/docker/daemon.json` (VM guide, section 3). T
 | Backend tag with all changes from 4.1 | section 4.1 |
 | `docker-compose.prod.yml` tested | section 4.2 |
 | HTTPS with a trusted certificate, HSTS | section 5.3, check 5.4 |
-| `/health/` answers `200` | check 5.4 |
 | `check --deploy` without relevant warnings | check 5.4 |
 | No credentials in the repositories or images | section 4.1 (`SECRET_KEY`, `db.env`, UBC key, `.dockerignore`) |
 | Auto-restart after a reboot | `restart: unless-stopped` and Docker on boot (VM guide, section 6.1) |

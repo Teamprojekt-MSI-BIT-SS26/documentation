@@ -335,8 +335,6 @@ docker compose exec web python -c "import urllib.request; print(urllib.request.u
 
 Then the end-to-end test: open the Teamable activity in the test course as a teacher, check that Teamable opens and that the student import shows the test students. Also check that the Django admin shows CSS (static files) and that the admin login works (no `403 CSRF`), and that Moodle under *Site administration → Notifications* shows no warning that cron has not run (`moodle-cron`, check with `docker compose logs moodle-cron`).
 
-Once the backend has a health endpoint (section 11), `https://<teamable-host>/health/` is routed to it already.
-
 ---
 
 ## 9. Updates
@@ -444,4 +442,4 @@ Errors in the LTI launch and the Moodle registration: see the troubleshooting of
 
 ## 11. Later: production
 
-Running Teamable for the HTWG Moodle with real student data is a separate step with the same setup: own VM, the HTWG Moodle as platform (whether an own test Moodle stays is open), a tagged backend version with the open security changes (`SECRET_KEY`, credentials, health endpoint, secure cookies, `.dockerignore`), backups and a data protection check. Details, open decisions and the go-live checklist: [Production plan (draft)](production-plan.md).
+Running Teamable for the HTWG Moodle with real student data is a separate step with the same setup: own VM, the HTWG Moodle as platform (whether an own test Moodle stays is open), a tagged backend version with the open security changes (`SECRET_KEY`, credentials, secure cookies, `.dockerignore`), backups and a data protection check. Details, open decisions and the go-live checklist: [Production plan (draft)](production-plan.md).
