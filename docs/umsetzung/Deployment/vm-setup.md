@@ -1,9 +1,11 @@
 # Set up the HTWG VM
 
 !!! info "What this is about"
-    Step-by-step setup of the dev instance on the HTWG VM: Teamable (frontend and backend) and an own Moodle 4.5 with test data, behind HTTPS, reachable via the HTWG VPN.
+    Step-by-step setup and operation of the dev instance on the HTWG VM: Teamable (frontend and backend) and an own Moodle 4.5 with test data, behind HTTPS, reachable via the HTWG VPN. It runs the Teamable dev stack; how the stack works is explained in [Local setup with Docker](dev-stack.md#6-how-the-stack-works).
 
-    This page lists the commands in the order that works. The reasons behind them are in [Dev instance on the HTWG VM](backend-htwg-vm.md) and [Teamable dev stack](dev-stack.md). Later, this page will be merged with the [local setup](../../recherche/LMS-Anbindung/local-moodle-teamable-setup.md).
+    The VM is used to test the LTI launch and the student import on a server, to show Teamable to others and to try out Moodle versions (e.g. 5.3 for the RZ). It holds **test data only**. Production with real student data builds on this setup: [Production plan (draft)](production-plan.md).
+
+    This page lists the commands in the order that works. The [local setup with Docker](dev-stack.md) uses the same stack and refers to sections 7 and 9 to 13 of this page.
 
 | | Value |
 |---|---|
@@ -598,6 +600,105 @@ The RZ renews the certificates in place. nginx only reads the renewed files afte
 
 ---
 
+## 15. Operation
+
+### 15.1 Further checks
+
+From your own machine (with VPN):
+
+```bash
+curl -I https://teamable-analytics.in.htwg-konstanz.de/          # 200 or 3xx from the frontend, not 502
+curl -I http://teamable-analytics.in.htwg-konstanz.de/           # 301 → https://
+```
+
+On the VM:
+
+```bash
+ss -tlnp | grep -E ':(8080|8008)\b'     # container ports only on 127.0.0.1, not 0.0.0.0
+```
+
+In the browser: the Teamable admin (`/admin/`) shows CSS and the login works without `403 CSRF`; Moodle shows no warning about cron under *Site administration → Notifications*.
+
+### 15.2 System updates
+
+Keep Ubuntu up to date, including Docker and nginx:
+
+```bash
+sudo apt update && sudo apt upgrade -y
+```
+
+Ubuntu Server installs security updates automatically with `unattended-upgrades`, which is installed and enabled by default. Check it, and enable it if needed:
+
+```bash
+cat /etc/apt/apt.conf.d/20auto-upgrades     # both values "1"
+sudo dpkg-reconfigure -plow unattended-upgrades
+```
+
+Kernel updates only take effect after a reboot; if `/var/run/reboot-required` exists, reboot the VM (`sudo reboot`). By default, `unattended-upgrades` only installs updates from the Ubuntu security repository. Docker comes from the Docker repository and is only updated by the manual `apt upgrade`. An update of Docker restarts the daemon; the containers come back on their own (`restart: unless-stopped`).
+
+### 15.3 Application code
+
+```bash
+cd /opt/teamable/teamable-dev-stack
+git -C teamable-backend pull
+git -C teamable-frontend pull
+docker compose up -d --build        # migrations run automatically on start
+docker compose logs -f web
+```
+
+### 15.4 Stack files
+
+```bash
+cd /opt/teamable/teamable-dev-stack
+git pull
+diff .env.example .env              # new variables? add them to .env
+docker compose up -d --build
+```
+
+If `host-nginx.conf` or `teamable-proxy.conf` changed, copy them again as in section 6.
+
+### 15.5 Another Moodle version
+
+The Moodle version is set via `MOODLE_IMAGE` in `.env`; `moodle` and `moodle-cron` both use it. Moodle can only be upgraded, not downgraded, and the upgrade changes the database. Alternatively, test a new version in a second Compose project with its own `COMPOSE_PROJECT_NAME`, ports and host names.
+
+Back up database and `moodledata` first:
+
+```bash
+cd /opt/teamable/teamable-dev-stack
+mkdir -p ~/moodle-backup
+
+# database dump
+docker compose exec -T moodle-db sh -c 'mariadb-dump -u root -p"$MARIADB_ROOT_PASSWORD" --single-transaction moodle' \
+  | gzip > ~/moodle-backup/moodle-db-$(date +%F).sql.gz
+
+# moodledata (one-off container with the same volumes as the moodle service)
+docker compose run --rm --no-deps -v ~/moodle-backup:/backup --entrypoint tar moodle \
+  czf /backup/moodledata-$(date +%F).tar.gz -C /var/www/moodledata .
+```
+
+Then upgrade:
+
+```bash
+# set the new MOODLE_IMAGE in .env, then
+docker compose up -d moodle moodle-cron
+docker compose exec -u www-data moodle php /var/www/html/admin/cli/upgrade.php --non-interactive
+```
+
+The upgrade can also be started in the browser: log in as admin, Moodle then shows the upgrade page. To go back, import the dump into an empty database, unpack the archive into the emptied `moodledata` volume and set the old `MOODLE_IMAGE` again.
+
+Before switching to a new image, check:
+
+- **Image:** whether `brandkern/moodle` offers a tag for the target version at all (e.g. 5.3). If not, another image is needed, and `docker-compose.yml` and `moodle-config.php` have to be adapted to it.
+- **`moodle-config.php`:** it is mounted to `/var/www/html/config.php` and reads the variables `DB_*`, `WWWROOT` and `MOODLE_SSLPROXY`. Since Moodle 5.1, the web root is the subfolder `public/`, while `config.php` stays in the main folder. Check the path of the Moodle code in the new image, the mount target and the web server configuration of the image.
+
+This is the environment for testing Teamable against Moodle 5.3 for the RZ.
+
+### 15.6 Data
+
+The VM only has test data, so there are no regular backups. Moodle (`moodledata`, `moodle-db-data`) and Teamable (`postgres-data`) live in Docker volumes of the project `teamable-dev`. `docker compose down -v` or a changed `COMPOSE_PROJECT_NAME` loses them or makes them invisible. `git clean -x` in `teamable-backend` deletes the LTI key pair.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause / solution |
@@ -606,4 +707,11 @@ The RZ renews the certificates in place. nginx only reads the renewed files afte
 | `openssl genrsa`: `Permission denied` in `lti/config` | The folder belongs to `root`, because the stack was started before it existed. `sudo chown -R "$USER":"$USER" lti/config` in `teamable-backend/src`, then create the keys again |
 | LTI launch `500`, log: `CERTIFICATE_VERIFY_FAILED … self-signed certificate` | Only with the self-signed certificate: workaround from 8.1 missing or `web` not recreated (`docker compose up -d web`) |
 | LTI launch `500`, log: `CERTIFICATE_VERIFY_FAILED … unable to get local issuer certificate` | The certificate file nginx uses lacks the intermediate chain. The RZ files contain it (check in 5.1); ask the RZ if `grep -c` prints `1` |
-| More errors | [VM guide](backend-htwg-vm.md#10-troubleshooting), [dev stack](dev-stack.md#troubleshooting), [local setup](../../recherche/LMS-Anbindung/local-moodle-teamable-setup.md#troubleshooting) |
+| `apt`, Docker installation, `docker compose build` or `git clone` hang until a timeout | Outgoing traffic is blocked by the RZ firewall. Ask the RZ to allow outgoing 80/443 and DNS (53) |
+| SSH connection breaks or parts of the HTWG network are unreachable after Docker starts | Docker networks (`172.17.0.0/16` and following) overlap with addresses of the HTWG network or the VPN. Add `default-address-pools` to `/etc/docker/daemon.json` from section 2 (e.g. `{"base": "10.200.0.0/16", "size": 24}`, choose a range the HTWG does not use), restart Docker and recreate the stack (`docker compose down && docker compose up -d`) |
+| `502 Bad Gateway` from the host nginx | Stack not running (`docker compose ps`), `web`/`frontend` still starting, or ports in `host-nginx.conf` do not match `TEAMABLE_PORT`/`MOODLE_PORT` |
+| `403 CSRF verification failed` | `X-Forwarded-Proto https` does not arrive: snippet not included in the host nginx, or `TEAMABLE_URL` is not `https://` |
+| `web` cannot reach Moodle (`certs.php`, import) | Firewall on the VM (e.g. `ufw`) blocks connections from the Docker bridge to port 443 of the host. Allow 443 for the Docker networks |
+| `password authentication failed` / `Access denied` in the database logs | Password in `.env` differs from the one used when the volume was created (section 4) |
+| Disk full | Docker build cache and old images: `docker system prune` (never with `--volumes`, that deletes the data) |
+| More errors | [local setup with Docker](dev-stack.md#troubleshooting), [local setup](../../recherche/LMS-Anbindung/local-moodle-teamable-setup.md#troubleshooting) |

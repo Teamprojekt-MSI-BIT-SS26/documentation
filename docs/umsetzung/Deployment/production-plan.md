@@ -1,7 +1,7 @@
 # Production plan (draft)
 
 !!! warning "Draft, not implemented"
-    This page plans running Teamable **in production**: frontend and backend for the HTWG Moodle, with real student data. Nothing of it is implemented yet. It builds on the [dev instance on the HTWG VM](backend-htwg-vm.md), which runs since November 2026, and only describes what is different in production. Open decisions are listed in section 2.
+    This page plans running Teamable **in production**: frontend and backend for the HTWG Moodle, with real student data. Nothing of it is implemented yet. It builds on the [dev instance on the HTWG VM](vm-setup.md), which runs since November 2026, and only describes what is different in production. Open decisions are listed in section 2.
 
     An earlier version of this plan used the `docker-compose.yml` of the backend repository with its own nginx, path routing in the host nginx, Debian 13 and staging on the production VM. It is in the Git history of this page.
 
@@ -40,7 +40,7 @@ flowchart LR
     WEB -->|"HTTPS: certs.php, token.php, NRPS"| HM
 ```
 
-The gateway does the path routing as on the dev VM ([dev stack](dev-stack.md#the-gateway)): backend paths to `web`, everything else to `frontend`, one origin, no CORS.
+The gateway does the path routing as on the dev VM ([local setup with Docker](dev-stack.md#the-gateway)): backend paths to `web`, everything else to `frontend`, one origin, no CORS.
 
 | | Dev VM | Production |
 |---|---|---|
@@ -79,7 +79,7 @@ New versions are tested on the dev VM first, then deployed to production. The de
 
 ## 3. Request from the RZ
 
-The same process as for the dev VM. Its request (VM, DNS, firewall, certificate via CSR) worked; outgoing traffic was already allowed.
+The same process as for the dev VM. Its request (VM, DNS, firewall, certificate from the RZ) worked; outgoing traffic was already allowed.
 
 | What | Details |
 |---|---|
@@ -87,7 +87,7 @@ The same process as for the dev VM. Its request (VM, DNS, firewall, certificate 
 | **DNS** | one name, `<prod-host>`, forward and reverse |
 | **Firewall inbound** | 443 (HTTPS), 80 (redirect, and Let's Encrypt if used), from the internet or the VPN depending on section 2. 22 (SSH) from the VPN only |
 | **Firewall outbound** | HTTPS to the HTWG Moodle (LTI and student import), to Docker Hub, GitHub, the npm registry and PyPI (builds), DNS |
-| **TLS certificate** | for `<prod-host>`, via CSR as on the dev VM ([VM guide, 5.1](backend-htwg-vm.md#51-key-and-csr-for-the-rz)), or Let's Encrypt if reachable from the internet |
+| **TLS certificate** | for `<prod-host>`, from the RZ as on the dev VM ([VM setup, 5.1](vm-setup.md#51-certificates-from-the-rz)), or Let's Encrypt if reachable from the internet |
 | **Backup storage** | a place outside the VM for the database dumps (section 6.2), e.g. a network share or the RZ backup system |
 | **Moodle** | tool registration in the HTWG Moodle with the production URLs (section 5.3) |
 
@@ -162,7 +162,7 @@ Depends on the decision about an own Moodle (section 2). Without Moodle in the p
 - keep `extra_hosts` of `frontend` (`TEAMABLE_HOST` → `host-gateway`), so that server-side requests of Next.js reach the host nginx
 - default project name `teamable-prod` instead of `teamable-dev`
 
-`.env` selects the file with `COMPOSE_FILE=docker-compose.prod.yml`; then every `docker compose` command uses it without `-f`. Also add `docker-compose.override.yml` to `.gitignore` (VM guide, section 6.2).
+`.env` selects the file with `COMPOSE_FILE=docker-compose.prod.yml`; then every `docker compose` command uses it without `-f`. Also add `docker-compose.override.yml` to `.gitignore` (VM setup, section 8.1).
 
 Test the file before go-live. How is still open: on the production VM against a test course in the HTWG Moodle, or on the dev VM in a second Compose project (own `COMPOSE_PROJECT_NAME`, `TEAMABLE_PORT` and host name) against its Moodle.
 
@@ -170,9 +170,9 @@ Test the file before go-live. How is still open: on the production VM against a 
 
 ## 5. Setup on the VM
 
-Follow the [VM guide](backend-htwg-vm.md) with these differences.
+Follow the [VM setup](vm-setup.md) with these differences.
 
-### 5.1 Prepare the VM (VM guide, section 3)
+### 5.1 Prepare the VM (VM setup, sections 1 to 3)
 
 Same steps. Clone the backend at the release tag instead of the spike branch:
 
@@ -184,7 +184,7 @@ git clone https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-frontend.git
 git -C teamable-frontend checkout <tag>
 ```
 
-### 5.2 `.env` (VM guide, section 4)
+### 5.2 `.env` (VM setup, section 4)
 
 ```bash
 COMPOSE_PROJECT_NAME=teamable-prod
@@ -200,16 +200,16 @@ POSTGRES_PASSWORD=<random>
 
 No `MOODLE_*` variables. New random values, never the ones of the dev VM.
 
-### 5.3 TLS, host nginx and LTI (VM guide, sections 5 and 7)
+### 5.3 TLS, host nginx and LTI (VM setup, sections 5 to 7, 10 and 11)
 
-- **Certificate:** one host name in the CSR. A temporary self-signed certificate is acceptable during the setup, but go live only with the real one. Section 6.2 of the VM guide (CA bundle for `web`) is not needed: the HTWG Moodle has a publicly trusted certificate.
+- **Certificate:** one certificate from the RZ for `<prod-host>`. A temporary self-signed certificate is acceptable during the setup, but go live only with the real one. Section 8.1 of the VM setup (CA bundle for `web`) is not needed: the HTWG Moodle has a publicly trusted certificate.
 - **Host nginx:** only the Teamable `server` block of `host-nginx.conf` (and the HTTP redirect for `<prod-host>`). Once the real certificate is in place, add HSTS: `add_header Strict-Transport-Security "max-age=31536000" always;`.
 - **LTI:** own key pair on the VM. The RZ registers the tool in the HTWG Moodle with `https://<prod-host>/lti/launch/` (Tool URL and Redirection URI, identical) and `https://<prod-host>/lti/login/` (Initiate login URL). The top-level key of `lti_config_settings.json` is exactly the Platform ID of the HTWG Moodle (`<htwg-moodle-url>`), `client_id` and `deployment_ids` come from the RZ.
 - **Organization** in the Teamable admin: LMS type `MOODLE`, LMS API URL = `<htwg-moodle-url>`.
 
-### 5.4 Checks (VM guide, section 8)
+### 5.4 Checks (VM setup, sections 8, 13 and 15.1)
 
-In addition to the checks of the VM guide:
+In addition to the checks of the VM setup:
 
 ```bash
 # on the VM
@@ -238,7 +238,7 @@ docker compose logs -f web
 
 **Rollback:** check out the previous tags and rebuild. If the new version has run migrations, the old code may not work with the new schema; then restore the backup from before the update.
 
-System updates (Ubuntu, Docker, nginx): as on the dev VM (VM guide, section 9.1).
+System updates (Ubuntu, Docker, nginx): as on the dev VM (VM setup, section 15.2).
 
 ### 6.2 Backup and restore
 
@@ -272,7 +272,7 @@ Test the restore once after the first deployment, on the production VM in a seco
 
 Also keep `.env` and the LTI key pair (`teamable-backend/src/lti/config/`) encrypted in a protected place. Without the key pair, the tool has to be registered in the HTWG Moodle again after losing the VM.
 
-`docker compose down -v`, a changed `COMPOSE_PROJECT_NAME` or `git clean -x` in `teamable-backend` lose the database or the key pair (VM guide, section 9.5).
+`docker compose down -v`, a changed `COMPOSE_PROJECT_NAME` or `git clean -x` in `teamable-backend` lose the database or the key pair (VM setup, section 15.6).
 
 ### 6.3 Monitoring
 
@@ -281,7 +281,7 @@ Also keep `.env` and the LTI key pair (`teamable-backend/src/lti/config/`) encry
 
 ### 6.4 Logs
 
-Container logs are limited by `/etc/docker/daemon.json` (VM guide, section 3). The access logs of the host nginx (`/var/log/nginx/`) and of the gateway (`docker compose logs gateway`) contain the auth token after the LTI launch (section 4.1); treat them as confidential.
+Container logs are limited by `/etc/docker/daemon.json` (VM setup, section 2). The access logs of the host nginx (`/var/log/nginx/`) and of the gateway (`docker compose logs gateway`) contain the auth token after the LTI launch (section 4.1); treat them as confidential.
 
 ---
 
@@ -295,7 +295,7 @@ Container logs are limited by `/etc/docker/daemon.json` (VM guide, section 3). T
 | HTTPS with a trusted certificate, HSTS | section 5.3, check 5.4 |
 | `check --deploy` without relevant warnings | check 5.4 |
 | No credentials in the repositories or images | section 4.1 (`SECRET_KEY`, `db.env`, UBC key, `.dockerignore`) |
-| Auto-restart after a reboot | `restart: unless-stopped` and Docker on boot (VM guide, section 6.1) |
+| Auto-restart after a reboot | `restart: unless-stopped` and Docker on boot (VM setup, section 2) |
 | Daily backup with a copy outside the VM, restore tested | section 6.2 |
 | `.env` and LTI key pair backed up | section 6.2 |
 | Tool registered in the HTWG Moodle, end-to-end test passed | sections 5.3 and 5.4 |
@@ -305,7 +305,7 @@ Container logs are limited by `/etc/docker/daemon.json` (VM guide, section 3). T
 
 ## 8. Troubleshooting
 
-Errors that only occur in production. For everything else, see the troubleshooting of the [VM guide](backend-htwg-vm.md#10-troubleshooting) and the [dev stack](dev-stack.md#troubleshooting).
+Errors that only occur in production. For everything else, see the troubleshooting of the [VM setup](vm-setup.md#troubleshooting) and the [local setup with Docker](dev-stack.md#troubleshooting).
 
 | Symptom | Cause / solution |
 |---|---|
