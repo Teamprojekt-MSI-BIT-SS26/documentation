@@ -1,15 +1,13 @@
 # Set up the HTWG VM
 
 !!! info "What this is about"
-    Step-by-step setup of the dev instance on the HTWG VM, exactly as it runs now: Teamable (frontend and backend) and an own Moodle 4.5 with test data, behind HTTPS, reachable via the HTWG VPN.
+    Step-by-step setup of the dev instance on the HTWG VM: Teamable (frontend and backend) and an own Moodle 4.5 with test data, behind HTTPS, reachable via the HTWG VPN.
 
     This page lists the commands in the order that works. The reasons behind them are in [Dev instance on the HTWG VM](backend-htwg-vm.md) and [Teamable dev stack](dev-stack.md). Later, this page will be merged with the [local setup](../../recherche/LMS-Anbindung/local-moodle-teamable-setup.md).
 
-    **Tested on 2026-11-24** on Ubuntu 26.04.1 LTS, Docker 29.10, Compose v5.8.0, nginx 1.28.3, backend branch `local-moodle-lti-nrps-import`, Moodle `v4.5.4`.
-
 | | Value |
 |---|---|
-| VM | `teamable-analytics.in.htwg-konstanz.de`, `141.37.22.162` |
+| VM | `141.37.22.162` |
 | Teamable | `https://teamable-analytics.in.htwg-konstanz.de` |
 | Moodle | `https://moodle-teamable-analytics.in.htwg-konstanz.de` |
 | Stack | `/opt/teamable/teamable-dev-stack` |
@@ -74,8 +72,6 @@ Log out and in again, so that the group `docker` takes effect.
 
 ## 3. Clone the repositories
 
-All three repositories are public; no deploy key is needed.
-
 ```bash
 sudo mkdir -p /opt/teamable
 sudo chown "$USER":"$USER" /opt/teamable
@@ -118,6 +114,8 @@ MOODLE_DB_PASSWORD=<random>
 
 Create each `<random>` with `openssl rand -hex 32`. Set the passwords before the first start: the databases only read them when their volume is created.
 
+The backend does not read `SECRET_KEY` yet; it still uses the key hard-coded in `src/teamable/settings.py`. Set it anyway, so that nothing has to change once it does.
+
 ---
 
 ## 5. TLS certificate
@@ -148,7 +146,7 @@ cat /etc/ssl/teamable/teamable-dev.csr
 
 ### 5.2 Temporary self-signed certificate
 
-Until the RZ certificate arrives, nginx needs a certificate to start:
+Until the RZ certificate arrives, nginx needs a certificate to start. Skip this step if the certificate from the RZ is already there: store it (including the intermediate chain) as `/etc/ssl/teamable/teamable-dev.fullchain.pem` instead.
 
 ```bash
 cd /etc/ssl/teamable
@@ -212,7 +210,16 @@ The first build takes several minutes. Then create the admin account for Teamabl
 docker compose exec web python manage.py createsuperuser
 ```
 
+Health check: Teamable answers via HTTPS (must print `200`). `-k` is only needed while the temporary certificate from 5.2 is in use:
+
+```bash
+curl -k -s -o /dev/null -w '%{http_code}\n' "https://$TEAMABLE_HOST/admin/login/"
+```
+
 ### 8.1 Let `web` trust the temporary certificate
+
+!!! warning "Only with the self-signed certificate"
+    This step is only needed while the temporary self-signed certificate from 5.2 is in use. Skip it if the certificate from the RZ is already installed: `web` trusts its chain without a CA bundle. When the RZ certificate replaces the temporary one later, undo this step (section 14).
 
 With the self-signed certificate from 5.2, the backend cannot fetch `certs.php` from Moodle; the LTI launch fails with `500` and `CERTIFICATE_VERIFY_FAILED` in `docker compose logs web`. Give `web` a CA bundle that contains the certificate:
 
@@ -483,7 +490,7 @@ In the Teamable admin (`https://teamable-analytics.in.htwg-konstanz.de/admin/`),
 
 | Problem | Cause / solution |
 |---|---|
-| Launch: `500`, log: `CERTIFICATE_VERIFY_FAILED` | workaround from 8.1 missing |
+| Launch: `500`, log: `CERTIFICATE_VERIFY_FAILED` | With the self-signed certificate: workaround from 8.1 missing. With the RZ certificate: chain in `teamable-dev.fullchain.pem` incomplete (section 14) |
 | Launch: `IntegrityError … organization` | organization missing (12.1); create it and start the activity again from the course |
 | `iss … [client_id=…] not found in settings` | Platform ID or Client ID in `lti_config_settings.json` does not match Moodle exactly (sections 10 and 11) |
 | `Missing canvas_course_id/canvas_user_id custom claims` | custom parameters of the Moodle tool missing or incomplete (section 10) |
@@ -509,7 +516,7 @@ sudo rm /etc/ssl/teamable/ca-bundle-dev.pem
 docker compose up -d web
 ```
 
-Check that the browser no longer warns and that the check from 8.1 still prints `200`.
+Check that the browser no longer warns, that the health check from section 8 prints `200` without `-k`, and that the check from 8.1 still prints `200`.
 
 ---
 
@@ -519,5 +526,6 @@ Check that the browser no longer warns and that the check from 8.1 still prints 
 |---|---|
 | `nginx -t`: `cannot load certificate` | `teamable-dev.fullchain.pem` missing: create the temporary certificate (5.2) |
 | `openssl genrsa`: `Permission denied` in `lti/config` | The folder belongs to `root`, because the stack was started before it existed. `sudo chown -R "$USER":"$USER" lti/config` in `teamable-backend/src`, then create the keys again |
-| LTI launch `500`, log: `CERTIFICATE_VERIFY_FAILED … self-signed certificate` | Workaround from 8.1 missing or `web` not recreated (`docker compose up -d web`) |
+| LTI launch `500`, log: `CERTIFICATE_VERIFY_FAILED … self-signed certificate` | Only with the self-signed certificate: workaround from 8.1 missing or `web` not recreated (`docker compose up -d web`) |
+| LTI launch `500`, log: `CERTIFICATE_VERIFY_FAILED … unable to get local issuer certificate` | With the RZ certificate: intermediate chain missing in `teamable-dev.fullchain.pem` (section 14) |
 | More errors | [VM guide](backend-htwg-vm.md#10-troubleshooting), [dev stack](dev-stack.md#troubleshooting), [local setup](../../recherche/LMS-Anbindung/local-moodle-teamable-setup.md#troubleshooting) |
