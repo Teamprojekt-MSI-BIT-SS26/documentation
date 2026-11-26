@@ -13,6 +13,35 @@
 | Stack | `/opt/teamable/teamable-dev-stack` |
 | TLS files | `/etc/ssl/teamable/` |
 
+```mermaid
+flowchart LR
+    Browser((Browser<br/>HTWG VPN)) -->|"HTTPS :443"| HN
+
+    subgraph VM["HTWG VM 141.37.22.162"]
+        HN["nginx on the host<br/>TLS for both host names"]
+
+        subgraph STACK["Compose project teamable-dev<br/>/opt/teamable/teamable-dev-stack"]
+            GW["gateway<br/>127.0.0.1:8080"]
+            WEB["web<br/>Teamable backend"]
+            DB[("db<br/>Postgres")]
+            FE["frontend<br/>Next.js"]
+            MO["moodle<br/>127.0.0.1:8008"]
+            CRON["moodle-cron"]
+            MDB[("moodle-db<br/>MariaDB")]
+            GW -->|"/api/ /admin/ /lti/ /oauth/"| WEB --> DB
+            GW -->|"everything else"| FE
+            MO --> MDB
+            CRON --> MDB
+        end
+
+        HN -->|"teamable-analytics…"| GW
+        HN -->|"moodle-teamable-analytics…"| MO
+        WEB -.->|"LTI: certs.php, token.php, NRPS<br/>via the host nginx"| HN
+    end
+```
+
+The browser only talks to the host nginx, which picks the target by host name. The gateway splits Teamable into backend and frontend by path. The backend reaches Moodle via its public HTTPS address, that is, through the host nginx again.
+
 ---
 
 ## 0. Before you start
