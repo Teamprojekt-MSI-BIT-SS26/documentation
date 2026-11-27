@@ -7,6 +7,9 @@
 
     **Tested with:** Moodle 4.5.4 (Docker image `brandkern/moodle:4.5-latest`), Windows 11, Python 3.10, Node 20. The HTWG Moodle runs on 4.5.14, which is the same LTS version.
 
+!!! tip "Everything in Docker"
+    To run backend and frontend in Docker as well, together with Moodle in one Compose project, see [Local setup with Docker](../../umsetzung/Deployment/local-docker-setup.md). It uses the same stack as the HTWG VM.
+
 ## Overview
 
 At the end, three services run at the same time:
