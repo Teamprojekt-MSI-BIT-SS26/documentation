@@ -3,7 +3,7 @@
 !!! info "What this is about"
     This guide rebuilds the proof of concept from the Moodle spike locally: Teamable is opened from a Moodle course via **LTI 1.3** and imports the students via **NRPS** (Names and Role Provisioning Service).
 
-    **Code:** `teamable-backend`, branch `local-moodle-lti-nrps-import`. The branch is a spike state and will not be merged into `master`.
+    **Code:** `teamable-backend`, branch `local-moodle-lti-nrps-import`. The branch is a spike state and will not be merged into `master`. The Moodle support reached `master` on 2026-11-18 via a different branch (`moodle-lti-new-final`).
 
     **Tested with:** Moodle 4.5.4 (Docker image `brandkern/moodle:4.5-latest`), Windows 11, Python 3.10, Node 20. The HTWG Moodle runs on 4.5.14, which is the same LTS version.
 

@@ -5,10 +5,13 @@
 
     An earlier version of this plan used the `docker-compose.yml` of the backend repository with its own nginx, path routing in the host nginx, Debian 13 and staging on the production VM. It is in the Git history of this page.
 
+!!! warning "Backend `master` has moved on"
+    On 2026-11-18, the Moodle support and a separate algorithms API for team generation were merged into `teamable-backend` `master` ([Backend integration](../Backend-Integration/INTEGRATION_EN.md)). The dev VM still runs the spike branch `local-moodle-lti-nrps-import`. Switching the dev stack to `master` is planned. This page is only corrected where it was wrong and will be updated after the switch.
+
 !!! info "What this is about"
     Production uses the same setup as the dev VM: one Docker Compose project with `gateway`, `web`, `db` and `frontend` behind nginx on the host, which terminates TLS. The differences: the backend talks to the HTWG Moodle, a tagged backend version, backups and stricter settings. Whether production keeps an own Moodle for testing is still open (section 2).
 
-    **Not the GPU server:** the backend does **not** run on the GPU cluster of the Institute for Optical Systems, which hosts the AI model (see "AI Model Deployment on the HTWG Server"). Team generation runs inside the backend (`src/app/services/team_generation.py` calls no external API). If this changes, outgoing traffic from the VM to the GPU server has to be requested from the RZ.
+    **Not the GPU server:** the backend does **not** run on the GPU cluster of the Institute for Optical Systems, which hosts the AI model (see "AI Model Deployment on the HTWG Server"). On `master`, the backend sends team generation requests to the algorithms API (repository [`algorithms`](https://github.com/Teamprojekt-MSI-BIT-SS26/algorithms)), which can run as an internal service in the same Compose project (section 2). If the backend ever has to call the GPU server, outgoing traffic from the VM to it has to be requested from the RZ.
 
     **Code:** [`teamable-dev-stack`](https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-dev-stack), [`teamable-backend`](https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-backend), [`teamable-frontend`](https://github.com/Teamprojekt-MSI-BIT-SS26/teamable-frontend). `<prod-host>` and `<htwg-moodle-url>` are placeholders.
 
@@ -73,7 +76,7 @@ New versions are tested on the dev VM first, then deployed to production. The de
 | VM | own VM / second Compose project on the dev VM | **own VM**: experiments and Moodle upgrades on the dev VM must not affect real student data |
 | Own Moodle for testing | none, tests on the dev VM / second Compose project with Teamable and Moodle (dev stack) on the production VM / Moodle in the production project, one Teamable for both Moodles | open; the dev VM has an own Moodle so that the team can test everything now. With Moodle in the production project, test and real data share one database |
 | Production Compose file | `docker-compose.prod.yml` in `teamable-dev-stack` / own repository | **`docker-compose.prod.yml` in `teamable-dev-stack`**: same gateway, same templates; maybe rename the repository to `teamable-stack` |
-| Backend branch for `master` | one of the Moodle branches (section 4.1) | the branch that runs on the dev VM (`local-moodle-lti-nrps-import`) |
+| Algorithms API (team generation) | internal service in the same Compose project / own VM | **internal service** `algorithms`, called by `web` at `http://algorithms:8001/`; no own port, host name or certificate. Its database only holds request logs and is emptied on every start, so it needs no backup |
 
 ---
 
@@ -101,13 +104,7 @@ Processing times at the RZ are long: send the request as soon as section 2 is de
 
 These changes belong in the backend repository (separate PRs). Deploy a **tag** that contains all of them.
 
-**Moodle support on `master`.** On `master`, the LTI launch only supports Canvas (`src/lti/views.py` requires `canvas_course_id`/`canvas_user_id`). The Moodle support (standard claims, import via NRPS) only exists on unmerged branches:
-
-- `52-technical-task-33-moodle-module-lti-standard-fields-integration-in-backend`
-- `local-backend-instance-moodle-lti`
-- `local-moodle-lti-nrps-import` (runs on the dev VM)
-
-They overlap and contain conflicting migrations (`0009_*`). Merge one into `master` with a linear migration history. Migrations must not be renumbered after the first production deployment.
+**Moodle support on `master`.** Merged on 2026-11-18 (PR #3, branch `moodle-lti-new-final`, migration `0009_moodle_lti`). The spike branch `local-moodle-lti-nrps-import` on the dev VM has a different migration `0009_*`, so switching the dev VM to `master` needs a fresh backend database. Migrations must not be renumbered after the first production deployment.
 
 **`SECRET_KEY` from the environment.** `src/teamable/settings.py` contains a hard-coded key, used for sessions, CSRF and the sign-up JWTs (`CourseMember.create_jwt_token`). Everyone who knows the repository can forge them. The stack already passes `SECRET_KEY` from `.env`; the backend has to read it. Place the code after the definition of `DEBUG`:
 
@@ -120,7 +117,7 @@ if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY must be set when DEBUG is not TRUE")
 ```
 
-**Credentials in the repository.** `db.env` contains a Postgres password, and `src/app/services/team_generation.py` a commented-out UBC API key. Remove both (`git mv db.env db.env.sample`, `db.env` into `.gitignore`). They stay in the Git history and count as public; inform the owner of the UBC API if the key is still valid. The stack does not use `db.env`; production gets its own random password in `.env`.
+**Credentials in the repository.** `db.env` contains a Postgres password. Remove it (`git mv db.env db.env.sample`, `db.env` into `.gitignore`). An old UBC API key is no longer in the code on `master`, but still commented out on the spike branch and in the Git history. Both count as public; inform the owner of the UBC API if the key is still valid. The stack does not use `db.env`; production gets its own random password in `.env`.
 
 **Secure cookies, switchable.** Session and CSRF cookies are also sent over HTTP. Setting them fixed whenever `DEBUG` is off breaks the local stack with `DEBUG=FALSE` over `http://` (the browser does not send the cookies back, the admin login fails). Proposal:
 
@@ -294,7 +291,7 @@ Container logs are limited by `/etc/docker/daemon.json` (VM setup, section 2). T
 | `docker-compose.prod.yml` tested | section 4.2 |
 | HTTPS with a trusted certificate, HSTS | section 5.3, check 5.4 |
 | `check --deploy` without relevant warnings | check 5.4 |
-| No credentials in the repositories or images | section 4.1 (`SECRET_KEY`, `db.env`, UBC key, `.dockerignore`) |
+| No credentials in the repositories or images | section 4.1 (`SECRET_KEY`, `db.env`, UBC key in the history, `.dockerignore`) |
 | Auto-restart after a reboot | `restart: unless-stopped` and Docker on boot (VM setup, section 2) |
 | Daily backup with a copy outside the VM, restore tested | section 6.2 |
 | `.env` and LTI key pair backed up | section 6.2 |

@@ -45,7 +45,7 @@ teamable-dev-stack/
 └── teamable-frontend/    # branch main
 ```
 
-The backend branch `local-moodle-lti-nrps-import` is a spike branch with the Moodle support (LTI with standard claims, import via NRPS). Switch to `main`/`master` as soon as the Moodle support is merged there.
+The backend branch `local-moodle-lti-nrps-import` is a spike branch with the Moodle support (LTI with standard claims, import via NRPS). Since 2026-11-18, `master` also has Moodle support, but it generates teams via the separate algorithms API, which the stack does not contain yet. Until the stack is switched, use the spike branch.
 
 Existing checkouts elsewhere can be used instead of new clones, via `.env`:
 
