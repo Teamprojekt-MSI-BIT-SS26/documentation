@@ -197,17 +197,16 @@ Fehlermeldung.
 Canvas-Zugangsdaten (z. B. ein Canvas-API-Token) braucht der Algorithmus nicht. Sie gehören in
 das Backend, das die Daten aus Canvas holt, und dort ebenfalls in Umgebungsvariablen.
 
-### Sicherheitshinweise aus der Analyse (noch offen)
+### Sicherheitshinweise aus der Analyse
 
-Diese Punkte betreffen den API-Betrieb, nicht den lokalen Lauf. Sie wurden im Rahmen dieser
-Aufgabe nicht geändert:
+Diese Punkte betreffen den API-Betrieb, nicht den lokalen Lauf. Punkt 1 und 3 sind mit der
+[Backend-Integration](../Backend-Integration/INTEGRATION.md) behoben:
 
-1. **Die API-Key-Middleware prüft den Key erst nach der Verarbeitung.** In
-   `algorithms/api/middlewares/api_key_authentication.py` wird `get_response(request)` vor der
-   Key-Prüfung aufgerufen. Auch Anfragen mit ungültigem Key führen also den Algorithmus aus und
-   schreiben einen Log-Eintrag. Nur die Antwort wird danach verworfen.
-2. **Die Dev-Settings enthalten fest eingetragene Werte.** `algorithms/api/settings/__init__.py`
-   setzt `SECRET_KEY` fest im Code, `DEBUG = True` und `ALLOWED_HOSTS = ["*"]`. Für den
-   produktiven Betrieb muss daher `settings/prod.py` verwendet werden.
-3. **`utils/api_auth.py` sucht beim Import eine Datei `env/.env*`.** Fehlt sie, bricht der Import
-   mit `StopIteration` ab.
+1. **Die API-Key-Middleware prüft den Key erst nach der Verarbeitung.** **Behoben:** Der Key
+   wird jetzt vor dem View geprüft. Ohne eingetragene Keys wird jede Anfrage abgelehnt.
+2. **Die Dev-Settings enthalten fest eingetragene Werte (noch offen).**
+   `algorithms/api/settings/__init__.py` setzt `DEBUG = True` und `ALLOWED_HOSTS = ["*"]`.
+   `SECRET_KEY` kommt inzwischen aus `DJANGO_SECRET_KEY` in `env/.env`, mit einem festen Wert als
+   Rückfall. Für den produktiven Betrieb muss daher `settings/prod.py` verwendet werden.
+3. **`utils/api_auth.py` sucht beim Import eine Datei `env/.env*`.** **Behoben:** Die Settings
+   laden `env/.env` bzw. `env/.env.prod` gezielt, `utils/api_auth.py` lädt keine Datei mehr.

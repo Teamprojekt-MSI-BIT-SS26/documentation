@@ -13,3 +13,8 @@ Ergebnisse aus der Umsetzungsphase.
 - [Local setup with Docker](Deployment/local-docker-setup.md)
 - [Set up the HTWG VM](Deployment/vm-setup.md)
 - [Production plan (draft)](Deployment/production-plan.md)
+
+## Backend-Integration
+
+- [Integration und Schnittstelle (Deutsch)](Backend-Integration/INTEGRATION.md) · [English](Backend-Integration/INTEGRATION_EN.md)
+- [Lokale Backend-Tests (Deutsch)](Backend-Integration/TESTS.md) · [English](Backend-Integration/TESTS_EN.md)
